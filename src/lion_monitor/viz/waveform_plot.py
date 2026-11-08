@@ -1,4 +1,4 @@
-"""原始波形折线图（Plotly；马哥要求绘图不用 pyplot）。
+"""原始波形折线图（Plotly；现场要求绘图不用 pyplot）。
 
 - 纵轴单位写成 ``yaxis.title``（加速度 a (g) / 速度 v (mm/s)）；
 - 超显示上限按最小/最大包络抽样（``features.waveform.sample_points``）；

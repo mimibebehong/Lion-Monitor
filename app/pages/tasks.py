@@ -125,7 +125,7 @@ with tab_list:
                     "备注", value=picked.remark, height=70, key=f"t_remark_{picked.id}"
                 )
 
-                # 保存 / 切换 / 归档 / 删除 同一排（马哥：放到一行，删除只留一个入口）
+                # 保存 / 切换 / 归档 / 删除 同一排（现场：放到一行，删除只留一个入口）
                 arm_key = f"del_armed_{picked.id}"
                 armed = bool(st.session_state.get(arm_key))
                 with st.container(key=_actions_class(picked.id)):
@@ -234,7 +234,7 @@ with tab_new:
                 created = tasks.create_task(session, name=name, operator=operator, remark=remark)
                 if status != "draft":
                     created = tasks.update_task(session, created.id, status=status)
-                # 新任务开箱带三个内置指标（马哥 2026-11-03）：健康树指标下拉直接可用
+                # 新任务开箱带三个内置指标（2026-11-03）：健康树指标下拉直接可用
                 metric_def.seed_defaults(session, created.id)
             switch_current_task(created.id)
             flash(f"已创建：{created.code} · {created.name}")

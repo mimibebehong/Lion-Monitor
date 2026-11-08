@@ -616,7 +616,7 @@ def soft_delete_node(
 
     # 传感器是台账资产，删掉「装配」不等于报废传感器：
     # 节点进回收站时把传感器解绑（node_id=None）留在台账当自由态，恢复节点时再挂回去。
-    # 马哥 2026-11-02：「把监测对象下的传感器节点删除了，传感器应该回到自由状态」。
+    # 2026-11-02：「把监测对象下的传感器节点删除了，传感器应该回到自由状态」。
     sensors_rows = list(
         session.execute(
             select(Sensor).where(Sensor.node_id.in_(ids), Sensor.deleted_at.is_(None))

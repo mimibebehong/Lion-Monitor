@@ -1,6 +1,6 @@
 """旧参数值（``stale=1``）的统计与「按当前参数重算」落库口径（S4A）。
 
-口径（马哥 2026-11-02 定，见 ``docs/kanban/bodies/s4a_brief.md``）：
+口径（2026-11-02 定，见 ``docs/kanban/bodies/s4a_brief.md``）：
 
 - 「待重算 N 条」= 该任务 / 该节点下 ``stale=1`` 且未删的指标值行数（``count_stale``）；
 - 重算后同一 ``(通道, 节点, 指标, computed_at)`` **直接覆盖为新值并置 ``stale=0``**

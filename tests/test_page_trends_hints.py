@@ -1,4 +1,4 @@
-"""趋势页 / 评级页提示信息精简（马哥 2026-11-03 标准档）。
+"""趋势页 / 评级页提示信息精简（2026-11-03 标准档）。
 
 - 每条曲线不再各占一行「📈 CH · code 共 N 点」，全页合并成一行汇总；
 - 「⏳ 待重算 0 条…」在 0 条时不显示，且不再重复出现两次；
@@ -135,7 +135,7 @@ def test_header_subtitle_shortened(trend_app):
 
 
 def test_rank_table_draws_tree_prefixes(trend_app):
-    """节点评级表的「节点」列用 ├─/└─ 树形前缀缩进（马哥 2026-11-03：缩进要美观）。"""
+    """节点评级表的「节点」列用 ├─/└─ 树形前缀缩进（2026-11-03：缩进要美观）。"""
     html = "\n".join(item.value for item in trend_app.markdown)
     assert "rank-table" in html, "评级表应改用可控制缩进/对齐的表格"
     assert "├─" in html or "└─" in html, "节点列要用树形前缀缩进"
@@ -143,7 +143,7 @@ def test_rank_table_draws_tree_prefixes(trend_app):
 
 
 def test_rank_table_centers_over_count(trend_app):
-    """「超限条数」数字居中显示（马哥 2026-11-03）。"""
+    """「超限条数」数字居中显示（2026-11-03）。"""
     html = "\n".join(item.value for item in trend_app.markdown)
     assert "td.cnt" in html or "class='cnt'" in html or 'class="cnt"' in html
     assert "text-align:center" in html.replace(" ", "")
@@ -167,7 +167,7 @@ def test_kpi_long_notes_are_tooltips_not_captions(trend_app):
 
 
 def test_no_node_total_kpi(trend_app):
-    """马哥 2026-11-03：「节点总数 22」这张卡不用显示。"""
+    """2026-11-03：「节点总数 22」这张卡不用显示。"""
     labels = [item.label for item in trend_app.metric]
     assert "节点总数" not in labels, labels
 
@@ -179,7 +179,7 @@ def test_grade_breakdown_kpi_explains_invalid(trend_app):
 
 
 def test_no_recompute_estimate_text(trend_app):
-    """马哥 2026-11-03：去掉「将重算 360 条，预计 8.4 秒左右」，改成点击时用进度条。"""
+    """2026-11-03：去掉「将重算 360 条，预计 8.4 秒左右」，改成点击时用进度条。"""
     caps = "\n".join(_captions(trend_app))
     assert "将重算" not in caps, caps
     assert "预计" not in caps, caps

@@ -480,7 +480,7 @@ def _check_thresholds(rows: Any) -> list[dict[str, Any]]:
             raise TemplateError(f"{where}：warn / alert 必须是数字")
         if warn < 0 or alert < 0:
             raise TemplateError(f"{where}：阈值不能为负（warn={warn}, alert={alert}）")
-        # 0 = 该档不判（马哥 2026-11-04 允许只设 warn 或只设 alert），
+        # 0 = 该档不判（2026-11-04 允许只设 warn 或只设 alert），
         # 两侧都 0 交由 validate_limit 报「至少填一个」
         try:
             kind = limits_rules.normalize_direction(row.get("direction") or "upper", strict=True)

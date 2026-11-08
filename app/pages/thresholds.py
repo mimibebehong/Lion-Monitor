@@ -268,7 +268,7 @@ if left.button("保存修改", key="lim_save", disabled=dirty == 0):
             if existing is not None:
                 writes.append(("delete", metric_node_id, code, 0.0, 0.0, direction))
             continue
-        # 马哥 2026-11-04：可以只设 warn 或只设 alert，留空的一侧记 0 = 该档不判
+        # 2026-11-04：可以只设 warn 或只设 alert，留空的一侧记 0 = 该档不判
         try:
             warn_f = float(warn_raw) if warn_raw else 0.0
             alert_f = float(alert_raw) if alert_raw else 0.0

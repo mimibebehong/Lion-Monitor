@@ -1,4 +1,4 @@
-"""保存与删除收在同一处（马哥 2026-11-02：同类功能不要分散）。"""
+"""保存与删除收在同一处（2026-11-02：同类功能不要分散）。"""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def datasets_env(tmp_path, monkeypatch):
 
 
 def test_sensors_actions_grouped(sensors_env):
-    """马哥 2026-11-04：保存修改放到最下面，与「删除这台传感器」同一排。"""
+    """2026-11-04：保存修改放到最下面，与「删除这台传感器」同一排。"""
     at = _app("sensors.py", "sensor_table")
     owner, save, delete = _order(at, "保存归属", "保存修改", "删除这台传感器")
     assert owner < save < delete, (owner, save, delete)
@@ -136,7 +136,7 @@ def test_datasets_actions_grouped(datasets_env):
     assert save < delete
 
 
-# ---------------------------------------------------------------- 指标配置页（马哥 2026-11-04）
+# ---------------------------------------------------------------- 指标配置页（2026-11-04）
 
 from lion_monitor.store import metric_def  # noqa: E402
 
@@ -155,7 +155,7 @@ def metrics_env(tmp_path, monkeypatch):
 
 
 def test_metrics_save_and_remove_share_a_row(metrics_env):
-    """马哥 2026-11-04：去掉勾选框，「从台账移除」与「保存修改」同一排，移除仍二次确认。"""
+    """2026-11-04：去掉勾选框，「从台账移除」与「保存修改」同一排，移除仍二次确认。"""
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file(str(ROOT / "app" / "pages" / "metrics.py"), default_timeout=180).run()

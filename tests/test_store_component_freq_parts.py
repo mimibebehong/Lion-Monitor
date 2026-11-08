@@ -20,7 +20,7 @@ from lion_monitor.store import component_freq, object_registry, tasks, tree
 from lion_monitor.store import db as store_db
 
 ROOT = Path(__file__).resolve().parents[1]
-ATTACHMENT = ROOT / "docs" / "examples" / "监测对象_20260309.csv"
+ATTACHMENT = ROOT / "tests" / "data" / "examples" / "监测对象_20260309.csv"
 
 
 @pytest.fixture()

@@ -2,7 +2,7 @@
 
 为什么需要：现场出问题时，日志分散在 logs\\lion-monitor.log、launcher.log、
 server.log、selfcheck.log、service.log…… 让人一个个找、一个个发，
-十有八九漏掉最关键的那个（马哥 2026-11-06：同事机器装完打开是 500，只捞到
+十有八九漏掉最关键的那个（2026-11-06：同事机器装完打开是 500，只捞到
 launcher/selfcheck，缺的正是 server.log）。
 
 0.1.2 起服务输出（Streamlit 启动横幅、uvicorn、print）统一进 lion-monitor.log，

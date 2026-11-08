@@ -1,4 +1,4 @@
-"""工作台紧凑化（马哥 2026-11-03「主要信息不需要下拉便能看到，次要信息可适当删除」）。
+"""工作台紧凑化（2026-11-03「主要信息不需要下拉便能看到，次要信息可适当删除」）。
 
 可自动化的口径：
 
@@ -74,7 +74,7 @@ def _markdown(at) -> list[str]:
 
 
 def test_header_has_no_subtitle(env):
-    """马哥 2026-11-04：注释性文字去掉 —— 页头不再挂副标题。"""
+    """2026-11-04：注释性文字去掉 —— 页头不再挂副标题。"""
     at = _app(env)
 
     captions = _captions(at)
@@ -116,7 +116,7 @@ def test_recent_import_capped_with_total(env):
 
 
 def test_helper_import_uses_shared_ui() -> None:
-    """工作台只用公共组件，别自造提示样式（马哥 2026-11-03「要牢记」）。"""
+    """工作台只用公共组件，别自造提示样式（2026-11-03「要牢记」）。"""
     src = PAGE.read_text(encoding="utf-8")
     assert "st.toast(" not in src
     assert "st.success(" not in src

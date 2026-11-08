@@ -1,6 +1,6 @@
 """阈值规则的**单一来源**：方向口径、保存校验、判级。
 
-口径（马哥 2026-10-31 拍板，替代先前「一律 warn < alert」的硬校验）：
+口径（2026-10-31 拍板，替代先前「一律 warn < alert」的硬校验）：
 
 - ``warn`` 是**级别更轻**的门槛，不是「数值更小」的门槛；
 - ``upper``（越大越差）：要求 ``warn < alert``；
@@ -108,7 +108,7 @@ def requirement_of(direction: object) -> str:
 def validate_limit(direction: object, warn: float, alert: float) -> None:
     """按方向校验 warn / alert，不合法抛 :class:`LimitError`。
 
-    **0 表示该档未设**（马哥 2026-11-04：可以只设 warn 或只设 alert）：
+    **0 表示该档未设**（2026-11-04：可以只设 warn 或只设 alert）：
 
     - 两侧都 0 → 等于没设阈值，报错（调用方应走删除）；
     - 只设一侧 → 无需比较大小，直接通过；
@@ -140,7 +140,7 @@ def problem_of(direction: object, warn: float, alert: float) -> str | None:
 def grade(value: float, direction: object, warn: float, alert: float) -> str:
     """单点判级 → ``normal`` / ``warn`` / ``alert`` / ``unset``（先判 alert，命中即 alert）。
 
-    ``warn`` / ``alert`` 为 **0 = 该档未设**（马哥 2026-11-04 允许只设一侧）：
+    ``warn`` / ``alert`` 为 **0 = 该档未设**（2026-11-04 允许只设一侧）：
     只设 warn 时永远不产生 alert，只设 alert 时没有 warn 档。
 
     方向按 ``normalize_direction`` 宽松解析（老数据 ``<`` 直接映射到 lower）。

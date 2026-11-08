@@ -1,6 +1,6 @@
 """演示数据清理守卫：``app/`` 与 ``src/`` 不得再引用 ``demo_data``。
 
-验收口径（马哥 2026-10-31 要求）：
+验收口径（2026-10-31 要求）：
 - ``grep -rn "demo_data" app/ src/`` 结果为 0；
 - 演示数据模块与 session_state 版健康树存储（已被 ``store/tree.py`` 取代）一并移除；
 - 健康树读写全部走真实库 ``data/lion.db``。

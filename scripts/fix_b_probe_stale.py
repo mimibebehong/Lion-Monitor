@@ -42,7 +42,7 @@ class World:
         store_db.init_db(self.engine)
         self.factory = store_db.make_session_factory(self.engine)
         with self.session() as session:
-            self.task = tasks.create_task(session, name="批次B探针", operator="马哥")
+            self.task = tasks.create_task(session, name="批次B探针", operator="操作员")
             metric_def.seed_defaults(session, self.task.id)
             root = tree.root_node(session, self.task.id)
             device = tree.create_node(

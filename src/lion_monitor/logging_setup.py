@@ -400,7 +400,7 @@ def setup_logging(
                     logger.removeHandler(console_handler)
                     console_handler.close()
 
-    # 马哥 2026-11-05：页面里未捕获的异常必须落盘（现场要能回溯）。
+    # 2026-11-05：页面里未捕获的异常必须落盘（现场要能回溯）。
     _take_over_streamlit_loggers(level)
     _attach_own_handlers(level)
     return log_file

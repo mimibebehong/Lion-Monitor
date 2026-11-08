@@ -11,7 +11,7 @@
 
 切窗（S4W-1 / S4W-2）：全部内置指标按 ``window_s`` / ``step_s`` 切分记录、逐窗算
 （``window_plan`` + ``compute_metric_series``），一次导入产出多个时点；末段不足一窗丢弃。
-**整段都不足一窗时一个值都不出**（G12，2026-11-02 马哥定：不足指标计算窗口的数据直接判无效），
+**整段都不足一窗时一个值都不出**（G12，2026-11-02 现场定：不足指标计算窗口的数据直接判无效），
 原因由 :func:`short_sample_reason` 给出（点数 / 窗长 / 采样率 / 所需点数）。
 时间偏移取**窗中心**（相对记录起点，秒）。
 
@@ -24,7 +24,7 @@
 单值接口 :func:`compute_metrics` 保持整段口径（回归金标准），只有逐窗路径切窗。
 
 底层只用 numpy：带通是**频域滤波**（``rfft`` → 带外频点置零 → ``irfft``），速度快、
-天然零相位、无 IIR 阶数与暂态（S4D，2026-11-02 马哥定：不再用 ``butter`` + ``sosfiltfilt``）。
+天然零相位、无 IIR 阶数与暂态（S4D，2026-11-02 现场定：不再用 ``butter`` + ``sosfiltfilt``）。
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ def window_plan(
 ) -> list[tuple[int, int]]:
     """按 ``window_s`` / ``step_s`` 切窗的样本区间 ``[(start, stop), ...]``。
 
-    - 末段不足一窗丢弃（马哥口径：2 s / 2 s 不重叠）
+    - 末段不足一窗丢弃（现场口径：2 s / 2 s 不重叠）
     - 整段不足一窗 → **空列表**：该类指标不出值，由 :func:`short_sample_reason`
       给出具体原因判定为无效（G12，撤销 S4W-1 的「整段当 1 个窗」兜底）
     - ``step_s`` 大于 ``window_s`` 时按窗长兜底（保存校验已拦，这里防呆）
@@ -206,7 +206,7 @@ def window_plan(
 def _band_rms(x: np.ndarray, sample_rate: float, params: dict[str, Any] | None = None) -> float:
     """带通后的加速度 RMS（g）：频域置零 → 有效值。
 
-    马哥 2026-11-02：a_RMS 也要有滤波设置（band_low / band_high）。
+    2026-11-02：a_RMS 也要有滤波设置（band_low / band_high）。
     带通不可用（样本太短 / 频带夹到为空）时退回不滤波的 RMS，绝不静默出 0。
     """
     band = _band_of(params, sample_rate)

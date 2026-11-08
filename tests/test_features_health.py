@@ -143,7 +143,7 @@ def _store_series(
 
 
 def test_state_uses_worst_of_last_five_points(session, task, built, tmp_path):
-    """马哥 2026-11-03：判级看最近 5 个点里最严重的一个，不再只看最新 1 点。
+    """2026-11-03：判级看最近 5 个点里最严重的一个，不再只看最新 1 点。
 
     最新点正常、但 5 点窗口内有一个越过 alert → 节点判 alert。
     """

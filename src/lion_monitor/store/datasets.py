@@ -48,7 +48,7 @@ __all__ = [
     "update_dataset",
 ]
 
-#: 数据集有效性状态（对应库里的 validity）；三态由马哥 2026-10-31 拍板（Q3）
+#: 数据集有效性状态（对应库里的 validity）；三态由2026-10-31 拍板（Q3）
 DATASET_STATUS = ("待判", "有效", "部分有效", "无效")
 
 _STATUS_TO_DB = {"待判": "pending", "有效": "pass", "部分有效": "partial", "无效": "fail"}

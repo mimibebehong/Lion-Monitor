@@ -1,4 +1,4 @@
-"""日志覆盖：马哥 2026-11-05「报错信息都会报错到 log 吧，方便日后运营」。
+"""日志覆盖：2026-11-05「报错信息都会报错到 log 吧，方便日后运营」。
 
 三层保证：
 
@@ -106,7 +106,7 @@ def test_business_logger_uses_same_file(log_dir):
 def test_ui_module_initializes_logging_for_any_entry_point():
     """深链接打开 /ingest 时 Streamlit 不执行 app/main.py，只能靠 ui.py 初始化日志。
 
-    马哥 2026-11-05 实测：直接访问页面 URL 时 setup_logging 被跳过，trace 文件为空、
+    2026-11-05 实测：直接访问页面 URL 时 setup_logging 被跳过，trace 文件为空、
     logs/lion-monitor.log 完全不写。把初始化放进 ui.py（每个页面都 import）才覆盖所有入口。
     """
     ui_source = Path(__file__).resolve().parents[1] / "app" / "ui.py"

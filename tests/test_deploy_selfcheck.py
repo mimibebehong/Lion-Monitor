@@ -4,7 +4,7 @@
 - 逻辑放 ``src/lion_monitor/deploy/selfcheck.py``，页面「环境自检」按钮与安装器共用一套；
   ``tools/selfcheck.py`` 只是 CLI 薄壳。
 - Windows 专有项（浏览器、Server Core、防火墙）在非 Windows 上返回 ``skip``，WSL 也能跑测试。
-- 失败项必须带人话建议（``fix``），马哥要求「不要没反应」。
+- 失败项必须带人话建议（``fix``），现场要求「不要没反应」。
 """
 
 from __future__ import annotations

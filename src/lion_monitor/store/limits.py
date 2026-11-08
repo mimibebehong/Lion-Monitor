@@ -94,7 +94,7 @@ def set_limit(
     """在节点上设阈值；同一节点同一指标再次设置视为修改。
 
     ``direction`` 接受 ``>`` / ``upper`` / ``<`` / ``lower``。
-    **0 表示该档不判**（马哥 2026-11-04：可以只设 warn 或只设 alert）；
+    **0 表示该档不判**（2026-11-04：可以只设 warn 或只设 alert）；
     两侧都有值时按方向校验大小关系（上限 warn < alert、下限 warn > alert），
     两侧都 0 抛 :class:`LimitError`。
 

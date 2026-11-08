@@ -24,7 +24,7 @@ from lion_monitor.store import (  # noqa: E402
 )
 from lion_monitor.store import db as store_db  # noqa: E402
 
-ATTACHMENT = ROOT / "docs" / "examples" / "监测对象_20260309.csv"
+ATTACHMENT = ROOT / "tests" / "data" / "examples" / "监测对象_20260309.csv"
 
 
 class Env:

@@ -53,3 +53,7 @@ wheels/
 .build/
 installer/output/
 *.7z
+
+# 内部文档与评审产物（公开仓库只保留源码；本地文件保留，需要时可自行生成）
+docs/
+reports/

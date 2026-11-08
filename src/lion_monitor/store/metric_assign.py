@@ -123,7 +123,7 @@ def list_assignments(session: Session, task_id: int) -> list[MetricRow]:
 
 
 def _resolve_metric_node(session: Session, task_id: int, node_id: int, code: str) -> tree.NodeRow:
-    """把「通道节点 或 指标节点」解析成**指标节点**（参数卡落点，马哥 2026-11-02）。
+    """把「通道节点 或 指标节点」解析成**指标节点**（参数卡落点，2026-11-02）。
 
     参数属于指标，不属于通道：落点一律是指标节点。传通道节点时按指标码找它下面的
     指标节点；找不到说明指标还没装配，报错让用户先装配，不自动造节点。

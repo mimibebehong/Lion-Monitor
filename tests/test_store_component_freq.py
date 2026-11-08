@@ -30,8 +30,8 @@ from lion_monitor.store import db as store_db
 from lion_monitor.store.models import ComponentFreq
 
 ROOT = Path(__file__).resolve().parents[1]
-ATTACHMENT = ROOT / "docs" / "examples" / "监测对象_20260309.csv"
-ATTACHMENT_GBK = ROOT / "docs" / "examples" / "监测对象_20260309_GBK原始.csv"
+ATTACHMENT = ROOT / "tests" / "data" / "examples" / "监测对象_20260309.csv"
+ATTACHMENT_GBK = ROOT / "tests" / "data" / "examples" / "监测对象_20260309_GBK原始.csv"
 
 #: 附件里各 freq_kind 的「部件数」非空计数（见设计文档 §S3 / 任务书验收 1）
 EXPECTED_PER_KIND = {

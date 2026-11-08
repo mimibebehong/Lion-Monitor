@@ -114,7 +114,7 @@ class Channel(Base):
 class MetricValue(Base):
     """指标值：每次计算一行。
 
-    方案 A（马哥 2026-10-31 拍板）**值按节点存**：``node_id`` 是健康树的通道节点 id，
+    方案 A（2026-10-31 拍板）**值按节点存**：``node_id`` 是健康树的通道节点 id，
     同一通道号挂在多个监测对象下时各算各的、各存一行；历史行 ``node_id`` 为空。
 
     参数快照（方案文档 2.3）：``params_hash`` 是生效参数的 sha1 前 12 位（含指标码 +
@@ -383,7 +383,7 @@ class ChannelReg(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("test_task.id"), index=True)
-    #: 归属是**绑定关系**（马哥口径）：为空表示自由，不归属任何监测对象
+    #: 归属是**绑定关系**（现场口径）：为空表示自由，不归属任何监测对象
     object_id: Mapped[int | None] = mapped_column(
         ForeignKey("monitor_object.id"), nullable=True, index=True
     )

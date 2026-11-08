@@ -63,7 +63,7 @@ def test_metrics_page_survives_stale_row_selection(env):
 
 
 def test_delete_selected_metric_does_not_crash(env):
-    """马哥实测场景：选中第 4 行（自定义指标）→ 删除 → 表格变 3 行，页面不能 IndexError。"""
+    """现场实测场景：选中第 4 行（自定义指标）→ 删除 → 表格变 3 行，页面不能 IndexError。"""
     from streamlit.testing.v1 import AppTest
 
     factory = env["factory"]
@@ -75,7 +75,7 @@ def test_delete_selected_metric_does_not_crash(env):
     at.run()
     assert [exc.value for exc in at.exception] == [], [exc.value for exc in at.exception]
 
-    # 马哥 2026-11-04：去掉勾选框，移除改二次点击
+    # 2026-11-04：去掉勾选框，移除改二次点击
     next(button for button in at.button if button.label == "从台账移除").click().run()
     assert [exc.value for exc in at.exception] == [], [exc.value for exc in at.exception]
     next(button for button in at.button if "确认移除" in button.label).click().run()

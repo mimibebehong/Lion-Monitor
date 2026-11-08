@@ -1,6 +1,6 @@
 """删掉通道节点 = 解绑：传感器留在台账当自由态，恢复节点时自动挂回去。
 
-马哥 2026-11-02：「我都把下面的三个监测对象监测的传感器节点删除了，为什么传感器还没有
+2026-11-02：「我都把下面的三个监测对象监测的传感器节点删除了，为什么传感器还没有
 恢复自由状态？」——装配是树上的关系，删装配不能把传感器一起删掉。
 """
 
@@ -99,7 +99,7 @@ def test_deleting_parent_object_node_frees_nested_channel_sensors(session, env):
 
 
 def test_channel_ownership_follows_assembly(session, env):
-    """删掉装配后，通道台账的归属要回到自由（马哥的原始诉求）"""
+    """删掉装配后，通道台账的归属要回到自由（现场的原始诉求）"""
     tree.soft_delete_node(session, env["channel_node"].id)
 
     rows = channel_reg.list_channels(session, env["task"].id)

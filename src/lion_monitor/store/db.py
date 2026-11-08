@@ -861,7 +861,7 @@ def ensure_metric_assign_unique_index(engine: Engine) -> None:
 def migrate_assigns_to_metric_nodes(engine: Engine) -> int:
     """metric_assign.node_id：通道节点 → 指标节点（参数配置下放到指标节点），幂等。
 
-    马哥 2026-11-02：指标参数属于指标，不属于通道。返回搬动的条数。
+    2026-11-02：指标参数属于指标，不属于通道。返回搬动的条数。
     找不到对应指标节点的行（通道节点已删 / 指标没装配）软删留痕，不丢数据。
     """
     from sqlalchemy import select, update
@@ -1006,7 +1006,7 @@ def migrate_metric_def_schema(engine: Engine) -> int:
 def migrate_metric_def_band_params(engine: Engine) -> int:
     """把 ``PARAM_SCHEMA`` 里**新增**的参数补进已有的内置指标定义（幂等）。
 
-    马哥 2026-11-02：a_RMS 也要有滤波设置（band_low / band_high）。老库里的 a_RMS
+    2026-11-02：a_RMS 也要有滤波设置（band_low / band_high）。老库里的 a_RMS
     声明里没有这两项，界面就不会渲染——这里按 key 补齐，已有项一律不动（用户改过的
     默认值不会被覆盖）。返回补充的参数条数。
     """

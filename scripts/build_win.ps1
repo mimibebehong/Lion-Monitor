@@ -45,7 +45,7 @@ $Dist = Join-Path $Root "dist"
 $Runtime = Join-Path $Dist "runtime"
 $Work = Join-Path $Root ".build"
 
-# 全程落盘：闪退、双击运行、远程排障都能查（马哥 2026-11-05「报错都要落 log」）
+# 全程落盘：闪退、双击运行、远程排障都能查（2026-11-05「报错都要落 log」）
 if (-not (Test-Path $Work)) { New-Item -ItemType Directory -Path $Work -Force | Out-Null }
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $BuildLog = Join-Path $Work ("build-" + $Stamp + ".log")

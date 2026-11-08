@@ -194,7 +194,7 @@ def test_plan_and_recompute_refuse_channel_without_metrics(session, task):
 
 
 def test_recompute_node_reports_progress(session, task, batch):
-    """重算过程按「文件 × 指标」推进，回调单调递增并以 1.0 收尾（马哥 2026-11-03 要进度条）。"""
+    """重算过程按「文件 × 指标」推进，回调单调递增并以 1.0 收尾（2026-11-03 要进度条）。"""
     ch1 = _imported_with_stale(session, task, batch)
     calls: list[tuple[float, str]] = []
     result = recompute.recompute_node(

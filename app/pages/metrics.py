@@ -124,7 +124,7 @@ with left:
                 f"来源文件：{plugin.path.name if plugin.path else '—'}　单位 {plugin.unit or '—'}"
             )
 
-        # 三个操作同一排、等宽（马哥 2026-11-03：同类操作放一起，注意美观一致）
+        # 三个操作同一排、等宽（2026-11-03：同类操作放一起，注意美观一致）
         code_for_del = plugin.code if plugin is not None else "none"
         arm_key = f"plugin_del_armed_{code_for_del}"
         armed = bool(st.session_state.get(arm_key))

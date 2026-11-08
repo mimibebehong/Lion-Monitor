@@ -1,7 +1,7 @@
 """批量补绑定（S4W-5）：给健康树里所有「通道 × 指标」补上参数绑定。
 
 背景：早期数据/老模板导入的指标节点只有节点、没有 ``metric_assign`` 行，界面显示
-「未绑定参数」，参数表单渲染不出来（改不了计算时长）。马哥要求页面上有「一键绑定全部
+「未绑定参数」，参数表单渲染不出来（改不了计算时长）。现场要求页面上有「一键绑定全部
 指标参数」的入口——作用范围是**全树所有指标**，不是某几个通道。
 
 口径：
@@ -64,7 +64,7 @@ def test_bind_missing_is_idempotent_and_uses_metric_node_id(scene):
     with factory() as session:
         rows = metric_assign.list_assignments(session, ids["task"])
         nodes = tree.list_nodes(session, ids["task"])
-    # 绑定行挂在指标节点上（马哥 2026-11-02：参数配置下放到指标节点）
+    # 绑定行挂在指标节点上（2026-11-02：参数配置下放到指标节点）
     metric_ids = {node.id for node in nodes if node.node_type == "metric"}
     assert {row.node_id for row in rows} == metric_ids
     assert sorted(row.code for row in rows) == ["a_Peak", "v_RMS", "v_RMS"]

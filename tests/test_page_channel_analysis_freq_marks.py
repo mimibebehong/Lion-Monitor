@@ -30,7 +30,7 @@ from lion_monitor.store import (  # noqa: E402
 )
 from lion_monitor.store import db as store_db  # noqa: E402
 
-ATTACHMENT = ROOT / "docs" / "examples" / "监测对象_20260309.csv"
+ATTACHMENT = ROOT / "tests" / "data" / "examples" / "监测对象_20260309.csv"
 FS = 32000.0
 POINTS = 64000
 
@@ -191,7 +191,7 @@ def test_node_override_changes_ledger_marker(env):
 
 
 def test_page_injects_compact_css(env):
-    """数据分析页必须注入紧凑版式（马哥 2026-11-03：绘图区不滚动就能看见）。"""
+    """数据分析页必须注入紧凑版式（2026-11-03：绘图区不滚动就能看见）。"""
     import ui
 
     at = _app(env)
@@ -202,7 +202,7 @@ def test_page_injects_compact_css(env):
 
 
 def test_envelope_tab_has_no_filter_order_control(env):
-    """包络谱参数行只剩 带通下限 / 带通上限 / 去均值（马哥 2026-11-03 删「滤波器阶数」）。"""
+    """包络谱参数行只剩 带通下限 / 带通上限 / 去均值（2026-11-03 删「滤波器阶数」）。"""
     at = _app(env)
     labels = [str(getattr(n, "label", "")) for n in at.number_input] + [
         str(getattr(c, "label", "")) for c in at.checkbox

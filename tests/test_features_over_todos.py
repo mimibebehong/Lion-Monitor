@@ -1,6 +1,6 @@
-"""待办里的「幅值超限」按「监测对象 × 通道 × 指标」聚合（马哥 2026-11-04）。
+"""待办里的「幅值超限」按「监测对象 × 通道 × 指标」聚合（2026-11-04）。
 
-马哥给的格式：
+现场给的格式：
 
 ```
 🔴 幅值超限  监测对象 监测通道 监测指标 超限等级 超限时间 超限点数   [看趋势]
@@ -119,7 +119,7 @@ def test_over_todos_level_follows_latest_point(session, built):
 
 
 def test_home_todo_text_uses_new_fields():
-    """工作台文案按马哥示例：幅值超限 + 对象/通道/指标/等级/时间/点数。"""
+    """工作台文案按现场示例：幅值超限 + 对象/通道/指标/等级/时间/点数。"""
     from pathlib import Path
 
     src = (Path(__file__).resolve().parents[1] / "app" / "pages" / "home.py").read_text(
@@ -127,13 +127,13 @@ def test_home_todo_text_uses_new_fields():
     )
 
     assert "振动超限" in src
-    assert "幅值超限" not in src  # 马哥 2026-11-04 改成「振动超限」
+    assert "幅值超限" not in src  # 2026-11-04 改成「振动超限」
     for field in ("监测对象", "监测通道", "监测指标", "超限等级", "超限时间", "超限点数"):
         assert field in src, f"缺少字段 {field}"
 
 
 def test_todo_rows_have_no_underline():
-    """马哥 2026-11-04：待办里的提示不要下划线（Streamlit 的 markdown a 自带下划线）。"""
+    """2026-11-04：待办里的提示不要下划线（Streamlit 的 markdown a 自带下划线）。"""
     from pathlib import Path
 
     src = (Path(__file__).resolve().parents[1] / "app" / "pages" / "home.py").read_text(
@@ -145,7 +145,7 @@ def test_todo_rows_have_no_underline():
 
 
 def test_todo_level_text_is_not_colored():
-    """马哥 2026-11-04：待办里的「告警」不再染红/橙，恢复常态色。"""
+    """2026-11-04：待办里的「告警」不再染红/橙，恢复常态色。"""
     from pathlib import Path
 
     src = (Path(__file__).resolve().parents[1] / "app" / "pages" / "home.py").read_text(

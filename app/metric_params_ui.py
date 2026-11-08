@@ -58,7 +58,7 @@ def recompute_needed(stored: dict[str, Any], current: dict[str, Any]) -> bool:
     """保存后生效参数是否变化（变了就得按新参数重算历史指标值）。
 
     以前只认带宽类（``BANDWIDTH_KEYS``），计算时长/步长/窗函数/去直流改了会静默落库：
-    历史值只被标 stale，界面不给任何提示。马哥要求统一——凡是生效参数有变化，
+    历史值只被标 stale，界面不给任何提示。现场要求统一——凡是生效参数有变化，
     都先弹「将影响 N 个数据集，需重算」的确认。
     """
     return bool(diff_params(current, stored))
@@ -414,7 +414,7 @@ def _param_summary(effective: dict[str, Any], row, limit=None) -> str:
 def render(task_id: int, channel_node) -> None:
     """通道节点的「监测指标」页签：只读汇总 + 跳转到指标节点编辑参数。
 
-    马哥 2026-11-02：参数配置下放到指标节点，通道这一级只汇总与装配。
+    2026-11-02：参数配置下放到指标节点，通道这一级只汇总与装配。
     """
     channel_code = channel_node.name
     with store_ctx.open_session() as session:

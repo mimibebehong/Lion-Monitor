@@ -26,7 +26,7 @@ from ..store import metrics as metric_store
 from .health import node_health, point_level
 from .series import MetricScope, metric_scopes
 
-#: 健康度窗口：取对象最新的 N 个有效指标点（马哥 2026-11-04 定版）
+#: 健康度窗口：取对象最新的 N 个有效指标点（2026-11-04 定版）
 HEALTH_WINDOW = 5
 
 #: 健康度：值 / 阈值的均值，1.0 = 踩到严重线
@@ -113,7 +113,7 @@ class ChannelView:
 class ObjectView:
     """监测对象卡片：设备归属 + 自身状态 + 名下测点 + 指标读数。
 
-    工作台「设备健康状态」按这个结构画数字孪生卡片（马哥 2026-11-04）：
+    工作台「设备健康状态」按这个结构画数字孪生卡片（2026-11-04）：
     一眼看到「哪台设备 → 哪个对象 → 哪几个测点 → 什么状态」。
     """
 
@@ -338,13 +338,13 @@ def object_health_scores(
 ) -> dict[int, HealthScore]:
     """每个监测对象 → (健康度, 参与点数)。
 
-    口径（马哥 2026-11-04）：**该对象最新的 5 个指标点的 mean(指标/阈值)**。
+    口径（2026-11-04）：**该对象最新的 5 个指标点的 mean(指标/阈值)**。
 
     - 点来自对象子树内所有指标节点，按 ``computed_at`` 倒序取最新 ``HEALTH_WINDOW`` 个有效点；
     - 阈值优先 ``alert``（严重线），没设 alert 才用 ``warn``，两者都为 0 视为未设阈值 → 该点跳过；
     - ``stale`` 点不参与（旧参数算出来的值）；
     - 方向为「越低越差」（``<``）的指标反算 ``阈值 / 值``，保持「越大越差」；
-    - 结果 **clamp 到 [0, 1]**（马哥 2026-11-04：最大不超过 1、最小不低于 0）；
+    - 结果 **clamp 到 [0, 1]**（2026-11-04：最大不超过 1、最小不低于 0）；
     - 一个可算的点都没有 → ``(None, 0)``，界面显示「—」，不许当 0。
     """
     nodes = nodes if nodes is not None else tree.list_nodes(session, task_id)
@@ -391,7 +391,7 @@ def object_health_scores(
         rows.sort(key=lambda pair: pair[0], reverse=True)
         picked = [ratio for _stamp, ratio in rows[:HEALTH_WINDOW]]
         avg = sum(picked) / len(picked)
-        # 马哥 2026-11-04：健康度最大不超过 1、最小不低于 0（比值超过阈值一律记 1.00）
+        # 2026-11-04：健康度最大不超过 1、最小不低于 0（比值超过阈值一律记 1.00）
         found[object_id] = (min(max(avg, 0.0), 1.0), len(picked))
     return found
 
@@ -596,7 +596,7 @@ def task_overview(session: Session, task_id: int | None = None) -> TaskOverview:
 def recent_datasets(session: Session, task_id: int, limit: int = 3) -> list:
     """最近导入的数据集（采集时间新的在前）。
 
-    马哥 2026-11-04：工作台「最近导入」只显示最近 3 条。
+    2026-11-04：工作台「最近导入」只显示最近 3 条。
     """
     rows = dataset_store.list_datasets(session, task_id)
     rows.sort(key=lambda row: (row.collected_at, row.id))

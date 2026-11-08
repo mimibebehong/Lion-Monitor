@@ -24,8 +24,8 @@ for extra in (ROOT / "src", ROOT / "app"):
 from lion_monitor.store import component_freq, object_registry, tasks  # noqa: E402
 from lion_monitor.store import db as store_db  # noqa: E402
 
-ATTACHMENT = ROOT / "docs" / "examples" / "监测对象_20260309.csv"
-ROUND_TRIP = ROOT / "docs" / "examples" / "监测对象_20260309_GBK原始.csv"
+ATTACHMENT = ROOT / "tests" / "data" / "examples" / "监测对象_20260309.csv"
+ROUND_TRIP = ROOT / "tests" / "data" / "examples" / "监测对象_20260309_GBK原始.csv"
 
 
 class Env:

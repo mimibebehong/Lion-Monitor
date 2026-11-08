@@ -28,7 +28,7 @@ AppPublisherURL={#MyAppURL}
 DefaultDirName={sd}\LionMonitor
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-; ★ 必须：否则 Inno 直接跳过目录页，静默装到默认路径（马哥明确要能自己选目录）
+; ★ 必须：否则 Inno 直接跳过目录页，静默装到默认路径（现场明确要能自己选目录）
 DisableDirPage=no
 ; 每次安装都从默认目录开始，避免升级时预填旧路径、让人以为路径改不了
 UsePreviousAppDir=no
@@ -173,7 +173,7 @@ end;
 ///
 /// 为什么必须在复制文件之前：如果旧实例（尤其是开机自启服务）还在跑，
 /// 安装器会覆盖它正在使用的 app/、src/、runtime/ 和 data/lion.db，
-/// 结果就是「装完打开是 Internal Server Error」——马哥 2026-11-06 在同事机器上
+/// 结果就是「装完打开是 Internal Server Error」——2026-11-06 在同事机器上
 /// 就撞到了：自检时报「8501 已有 Lion-Monitor 在运行」，说明装的时候旧实例没停。
 ///
 /// 具体怎么停交给 tools\stop_app.py（只用标准库：netstat + tasklist + taskkill +

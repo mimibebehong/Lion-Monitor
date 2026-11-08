@@ -129,7 +129,7 @@ with right:
         else:
             st.caption("这个数据集没有通道文件")
 
-        # 保存 / 删除同一个数据集的入口放在一张卡里、同一排（马哥：同类功能不要分散）
+        # 保存 / 删除同一个数据集的入口放在一张卡里、同一排（现场：同类功能不要分散）
         with st.container(border=True):
             new_name = st.text_input("名称", value=row.name, key=f"ds_name_{row.id}")
             cols = st.columns(2)

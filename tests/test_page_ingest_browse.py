@@ -1,4 +1,4 @@
-"""数据接入页：网页端目录浏览器（马哥 2026-11-04「不要没反应」）。
+"""数据接入页：网页端目录浏览器（2026-11-04「不要没反应」）。
 
 覆盖：按钮能打开、能逐级进入、能取消、能「保存」写回并记住、坏路径有明确提示。
 原生 Windows 对话框在多人访问 / 服务自启下不可用，页面已不再调用它。
@@ -158,7 +158,7 @@ def test_empty_dir_says_so(env):
 
 
 def test_subdirs_are_laid_out_in_a_grid_not_one_per_row():
-    """马哥 2026-11-05：文件夹不要一个占一行，多个文件夹排一行。"""
+    """2026-11-05：文件夹不要一个占一行，多个文件夹排一行。"""
     from pathlib import Path as _Path
 
     src = (_Path(__file__).resolve().parents[1] / "app" / "pages" / "ingest.py").read_text(

@@ -1,4 +1,4 @@
-"""全局滚动位置记忆（马哥 2026-11-03：点任何按钮刷新后页面位置要保持，要全局记住）。
+"""全局滚动位置记忆（2026-11-03：点任何按钮刷新后页面位置要保持，要全局记住）。
 
 实现放在 ``ui.page_header()``，所有页面自动生效；这里只验证脚本内容与被注入。
 """
@@ -59,7 +59,7 @@ def test_every_page_injects_scroll_script(env, page):
 def test_script_ignores_scroll_reset_during_restore_window():
     """重跑把 scrollTop 清零时会触发 scroll 事件；还原窗口内不许把 0 存进去。
 
-    马哥 2026-11-03：重算完成后页面跳回顶部 —— 就是清零事件把记忆值覆盖成 0 造成的。
+    2026-11-03：重算完成后页面跳回顶部 —— 就是清零事件把记忆值覆盖成 0 造成的。
     """
     html = ui.SCROLL_MEMORY_HTML
     assert "__uiScrollUntil" in html, "要用「还原窗口」标记，重跑期间不写记忆值"
@@ -74,7 +74,7 @@ def test_script_ignores_scroll_reset_during_restore_window():
 
 
 def test_script_remembers_tab_selection():
-    """有 tab 的页面，重跑后要回到原 tab（马哥 2026-11-03）。"""
+    """有 tab 的页面，重跑后要回到原 tab（2026-11-03）。"""
     html = ui.SCROLL_MEMORY_HTML
     assert 'data-testid="stTabs"' in html, "要按 tab 组找到页签"
     assert "ui_tab:" in html, "tab 选中态按页面路径分别记忆"

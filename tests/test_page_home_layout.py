@@ -1,4 +1,4 @@
-"""工作台版式（马哥 2026-11-04 四条要求）。
+"""工作台版式（2026-11-04 四条要求）。
 
 1、「当前任务」→「任务概览」，「最近导入」并入其中；
 2、顶部九步条搬进「流程完成度」，不再单独占一行；
@@ -38,7 +38,7 @@ def test_stepper_moved_into_progress_block():
     assert "stepper(" in right
     assert "wrap=True" in right
     assert "流程完成度" in right
-    # 马哥 2026-11-04：标题要带完成数，例如「流程完成度 9/9」
+    # 2026-11-04：标题要带完成数，例如「流程完成度 9/9」
     assert "<div class='tr-sub'>🔄 流程完成度 {done_steps}/{total_steps}</div>" in right
     assert "st.progress(" not in right, "进度条已被九步条替代"
 
@@ -71,7 +71,7 @@ def test_todo_font_is_larger():
 
 
 def test_recent_import_font_is_one_step_larger():
-    """马哥 2026-11-04：最近导入的数据集明细字体再大一号（12 → 13px，编号 11.5 → 12.5px）。"""
+    """2026-11-04：最近导入的数据集明细字体再大一号（12 → 13px，编号 11.5 → 12.5px）。"""
     src = _src()
 
     assert ".rec{display:flex;gap:8px;align-items:baseline;font-size:13px" in src
@@ -79,7 +79,7 @@ def test_recent_import_font_is_one_step_larger():
 
 
 def test_progress_label_matches_recent_import_typography():
-    """马哥 2026-11-04：「流程完成度 9/9」与「最近导入」标题字体颜色、大小保持一致。
+    """2026-11-04：「流程完成度 9/9」与「最近导入」标题字体颜色、大小保持一致。
 
     最近导入是 Streamlit 折叠条段落（0.82rem / #e6edf3 / 400），tr-sub 必须同规格。
     """

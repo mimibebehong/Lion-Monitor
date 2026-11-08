@@ -1,6 +1,6 @@
 """阈值规则单一来源：方向口径、保存校验、判级（S-1）。
 
-口径（马哥 2026-10-31 拍板）：
+口径（2026-10-31 拍板）：
 - warn 是**级别更轻**，不是数值更小；
 - ``upper``（越大越差）：warn < alert 才合法，值 >= warn → warn、值 >= alert → alert；
 - ``lower``（越小越差）：warn > alert 才合法，值 <= warn → warn、值 <= alert → alert。

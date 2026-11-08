@@ -108,7 +108,7 @@ def mark_caption(freq_raw: str, order_raw: str) -> None:
     if freqs:
         bits.append("频率 " + " / ".join(f"{v:g} Hz" for v in freqs))
     if orders and freqs:
-        # 每个目标频率都按同一组阶次标（马哥 2026-11-03），同一条频率的阶次同色
+        # 每个目标频率都按同一组阶次标（2026-11-03），同一条频率的阶次同色
         groups = []
         for base in freqs:
             inner = " / ".join(f"{order:g}×={order * base:g}" for order in orders)

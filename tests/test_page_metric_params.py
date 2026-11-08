@@ -174,7 +174,7 @@ def _select(at, label: str):
 
 
 def test_channel_tab_is_read_only_summary_and_jumps_to_metric_node(env):
-    """通道页签只做汇总：不给参数控件，每行一个「配置参数 →」跳到指标节点（马哥口径）。"""
+    """通道页签只做汇总：不给参数控件，每行一个「配置参数 →」跳到指标节点（现场口径）。"""
     env.bind()
     at = _app(env, env.channel.id)
 
@@ -223,7 +223,7 @@ def test_time_domain_metric_form_shows_window_and_step(env, code):
 
     assert _number(at, "计算时长（s）").value == 2.0
     assert _number(at, "计算步长（s）").value == 2.0
-    # 窗函数只属于频域指标；带通：a_RMS 有（2026-11-02 马哥要求），a_Peak 没有
+    # 窗函数只属于频域指标；带通：a_RMS 有（2026-11-02 现场要求），a_Peak 没有
     assert [s.label for s in at.selectbox if s.label == "窗函数"] == []
     bands = [n.label for n in at.number_input if n.label.startswith("带通")]
     assert bands == (["带通下限（Hz）", "带通上限（Hz）"] if code == "a_RMS" else []), bands
@@ -330,7 +330,7 @@ def test_window_change_asks_confirm_before_saving(env):
 
 
 def test_bulk_bind_all_button_is_removed(env):
-    """马哥 2026-11-03：新增指标节点已自动建参数卡，页面上的「一键绑定全部指标参数」删掉。"""
+    """2026-11-03：新增指标节点已自动建参数卡，页面上的「一键绑定全部指标参数」删掉。"""
     env.bind("v_RMS", assign=False)
     at = _app(env)
 

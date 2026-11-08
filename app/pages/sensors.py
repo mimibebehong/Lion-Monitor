@@ -164,7 +164,7 @@ with right:
         owner_ids: list[int | None] = [None] + [o.id for o in objects]
         current = owner_ids.index(row.object_id) if row.object_id in owner_ids else 0
 
-        # 同一台传感器的保存 / 归属 / 删除都放在这张卡里（马哥：同类功能不要分散）；
+        # 同一台传感器的保存 / 归属 / 删除都放在这张卡里（现场：同类功能不要分散）；
         # 2026-11-04 定版：保存修改放最下面，与「删除这台传感器」同一排
         with st.container(border=True):
             ch_code = st.text_input(

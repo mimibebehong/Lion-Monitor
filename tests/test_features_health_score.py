@@ -1,6 +1,6 @@
-"""监测对象健康度（马哥 2026-11-04）。
+"""监测对象健康度（2026-11-04）。
 
-口径（马哥原话）：**健康度用监测对象最新的 5 个指标点的 mean(指标/阈值) 代表**。
+口径（现场原话）：**健康度用监测对象最新的 5 个指标点的 mean(指标/阈值) 代表**。
 
 实现约定（写死在测试里，防止以后被改口径）：
 
@@ -174,7 +174,7 @@ def test_health_score_none_when_no_points(session, tmp_path):
 def test_health_score_inverted_direction_flips_ratio(session, tmp_path):
     """「越低越差」的指标反算 阈值/值，保持越大越差 —— 结果仍受 [0,1] 上限约束。
 
-    这里 8.0/4.0 = 2.0，按马哥 2026-11-04「健康度最大不超过 1」应显示 1.00。
+    这里 8.0/4.0 = 2.0，按2026-11-04「健康度最大不超过 1」应显示 1.00。
     """
     task = tasks.create_task(session, name="方向")
     root = tree.root_node(session, task.id)
@@ -211,7 +211,7 @@ def _single_point_score(session, task, comp, ch, code, value, warn, alert):
 
 
 def test_health_score_capped_at_one(session):
-    """马哥 2026-11-04：健康度最大不超过 1 —— 值远超阈值也只显示 1.00。"""
+    """2026-11-04：健康度最大不超过 1 —— 值远超阈值也只显示 1.00。"""
     task = tasks.create_task(session, name="上限")
     root = tree.root_node(session, task.id)
     device = tree.create_node(session, task.id, "device", "设备", parent_id=root.id)
@@ -226,7 +226,7 @@ def test_health_score_capped_at_one(session):
 
 
 def test_health_score_floor_at_zero(session):
-    """马哥 2026-11-04：健康度最小不低于 0 —— 负值不再冒出负数。"""
+    """2026-11-04：健康度最小不低于 0 —— 负值不再冒出负数。"""
     task = tasks.create_task(session, name="下限")
     root = tree.root_node(session, task.id)
     device = tree.create_node(session, task.id, "device", "设备", parent_id=root.id)

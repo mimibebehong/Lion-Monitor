@@ -96,7 +96,7 @@ def _metric_targets(node: dict) -> list[dict]:
     return out
 
 
-#: 节点评级表样式：树形前缀用等宽字体对齐，数字列用等宽数字，「超限条数」居中（马哥 2026-11-03）
+#: 节点评级表样式：树形前缀用等宽字体对齐，数字列用等宽数字，「超限条数」居中（2026-11-03）
 RANK_TABLE_CSS = """<style>
 .rank-table { width:100%; border-collapse:collapse; font-size:13px; }
 .rank-table th { text-align:left; font-weight:500; font-size:12px; color:#8b949e;
@@ -179,14 +179,14 @@ def _recompute_block(
     ``pairs`` = [(通道节点 id, 指标码 or None)]；``None`` 表示该节点树上挂的全部指标。
     预览与重算都走 ``features.recompute``，页面只负责按钮与提示。
 
-    ``export`` = (文件名, CSV 字节)：给了就与「重算本节点」**同一行**渲染（马哥 2026-11-04），
+    ``export`` = (文件名, CSV 字节)：给了就与「重算本节点」**同一行**渲染（2026-11-04），
     导出在左、重算在右，左列仍留给提示/进度条。
     """
     with store_ctx.open_session() as session:
         plans = [
             recompute.recompute_plan(session, TASK.id, node_id, code) for node_id, code in pairs
         ]
-    # 马哥 2026-11-03：不再显示「将重算 N 条、预计 X 秒」，改成点击后同一行左侧走真实进度条
+    # 2026-11-03：不再显示「将重算 N 条、预计 X 秒」，改成点击后同一行左侧走真实进度条
     has_work = any(plan.point_estimate for plan in plans)
     blocked = [text for plan in plans for text in plan.problems]
 
@@ -196,7 +196,7 @@ def _recompute_block(
         left_col, right_col = st.columns([0.6, 0.4], vertical_alignment="center")
         export_col = None
     else:
-        # 马哥 2026-11-04：导出按钮与「重算本节点」放同一行（导出在左、重算在右）
+        # 2026-11-04：导出按钮与「重算本节点」放同一行（导出在左、重算在右）
         left_col, export_col, right_col = st.columns(
             [0.40, 0.34, 0.26], vertical_alignment="center"
         )
@@ -213,7 +213,7 @@ def _recompute_block(
                 key=f"{key}_export",
                 width="stretch",
             )
-    # 二次点击确认（马哥 2026-11-03）：与任务页删除同一套交互，不再用勾选框
+    # 二次点击确认（2026-11-03）：与任务页删除同一套交互，不再用勾选框
     with right_col, st.container(key=f"{key}_arm"):
         if armed:
             st.markdown(danger_button_css(f"{key}_btn"), unsafe_allow_html=True)
@@ -316,7 +316,7 @@ picked_node = next((n for n in all_nodes if n.id == picked_id), None)
 
 with right:
     # on_change 才会开「按需渲染」：不选中的页签（健康评级要算全任务超限记录）
-    # 不再每次重跑都白算一遍（马哥 2026-11-05 嫌卡）
+    # 不再每次重跑都白算一遍（2026-11-05 嫌卡）
     tab_trend, tab_rank = st.tabs(
         ["趋势", "健康评级"], key="trend_tabs", on_change="rerun"
     )
@@ -473,7 +473,7 @@ with right:
                 values = [r.value for r in plotted]
                 fresh = [r for r in plotted if not r.stale]
                 stale = [r for r in plotted if r.stale]
-                # 「测试点数」只是排版：hover 依旧给北京时间（马哥要求信息不变）
+                # 「测试点数」只是排版：hover 依旧给北京时间（现场要求信息不变）
                 label_of = {
                     trend_view.beijing_moment(r.computed_at).strftime("%Y-%m-%d %H:%M:%S"): label
                     for r, label in zip(plotted, axis_labels, strict=True)
@@ -621,7 +621,7 @@ with right:
             [(t["channel_node_id"], t["code"]) for t in picked_targets],
             key=f"trend_recompute_{picked_node.id}",
             note=("参数 / 转速改过以后还没重算，图上画成灰色空心点；重算按当前生效参数覆盖为新值"),
-            # 导出与重算同一行（马哥 2026-11-04）；明细为空时只显示重算
+            # 导出与重算同一行（2026-11-04）；明细为空时只显示重算
             export=(
                 (
                     f"趋势_{scope_name}.csv",
@@ -667,7 +667,7 @@ with right:
                 ),
             ]
         )
-        if stale_total:  # 马哥 2026-11-03：0 条时不占版面
+        if stale_total:  # 2026-11-03：0 条时不占版面
             st.caption(
                 f"⏳ 待重算 {stale_total} 条旧参数值：图上画成灰色空心点，重算后按当前参数出数"
             )

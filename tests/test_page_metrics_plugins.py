@@ -1,4 +1,4 @@
-"""指标配置页的插件交互（马哥 2026-11-03：用户自己新增算法）。
+"""指标配置页的插件交互（2026-11-03：用户自己新增算法）。
 
 - 自定义算法在页面上可见（码 / 中文名 / 单位 / 参数项 / 文件）
 - 「新增指标」的指标码来自可用算法下拉，选中插件会把参数声明带出来
@@ -115,7 +115,7 @@ def test_create_metric_from_plugin_carries_schema(env):
 
 
 def test_plugin_table_matches_ledger_style(env):
-    """马哥 2026-11-03：插件区要与「指标台账」同风格 —— 左表选中、右详情。"""
+    """2026-11-03：插件区要与「指标台账」同风格 —— 左表选中、右详情。"""
     at = _app(env)
     frames = [df.value for df in at.dataframe]
     columns: set[str] = set()
@@ -135,7 +135,7 @@ def test_plugin_table_matches_ledger_style(env):
 
 
 def test_plugin_area_is_collapsed_right_under_ledger(env):
-    """马哥 2026-11-03：插件区折叠，与指标台账/详情并列（收起时不占主界面高度）。"""
+    """2026-11-03：插件区折叠，与指标台账/详情并列（收起时不占主界面高度）。"""
     at = _app(env)
     labels = [button.label for button in at.button]
     assert not any("补齐内置指标" in label for label in labels), labels
@@ -156,7 +156,7 @@ def test_plugin_area_is_collapsed_right_under_ledger(env):
 
 
 def test_plugin_area_has_import_and_hard_delete(env):
-    """马哥 2026-11-03：彻底删算法 + 导入新算法都放在插件区；台账只软删。"""
+    """2026-11-03：彻底删算法 + 导入新算法都放在插件区；台账只软删。"""
     at = _app(env)
     labels = [button.label for button in at.button]
 

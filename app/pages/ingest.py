@@ -84,10 +84,10 @@ DIR_KEY = "ingest_dir"
 BROWSE_KEY = "ingest_browse_open"
 BROWSE_PATH_KEY = "ingest_browse_path"
 BROWSE_ERROR_KEY = "ingest_browse_error"
-#: 目录列表一行放几个（马哥 2026-11-05：多个文件夹排一行）——
+#: 目录列表一行放几个（2026-11-05：多个文件夹排一行）——
 #: 4 列在 1280 宽下每列约 215px，刚好放得下 21 字符的批次名
 DIRS_PER_ROW = 4
-# 优先级（马哥 2026-11-04）：页面手填 > 上次记住的 > LION_SCAN_DIR > 内置默认
+# 优先级（2026-11-04）：页面手填 > 上次记住的 > LION_SCAN_DIR > 内置默认
 st.session_state.setdefault(DIR_KEY, ui_settings.get_scan_dir() or DEFAULT_DIR)
 
 
@@ -158,7 +158,7 @@ def _scan_and_flash(path: str) -> None:
 
 
 def _open_browser() -> None:
-    """点「浏览目录」：打开页面内的目录浏览器（马哥 2026-11-04）。
+    """点「浏览目录」：打开页面内的目录浏览器（2026-11-04）。
 
     为什么不再用 Windows 原生对话框：局域网多人访问时弹窗出现在**服务端屏幕**上，
     开机自启（服务跑在 session 0）更是根本弹不出来 —— 网页端浏览器任何浏览器都能用。
@@ -239,7 +239,7 @@ def _render_browser() -> None:
 
         if entries:
             with st.container(height=200):
-                # 马哥 2026-11-05：多个文件夹排一行，不要一个占一整行
+                # 2026-11-05：多个文件夹排一行，不要一个占一整行
                 for start in range(0, len(entries), DIRS_PER_ROW):
                     chunk = entries[start : start + DIRS_PER_ROW]
                     row = st.columns(DIRS_PER_ROW, gap="small", vertical_alignment="center")

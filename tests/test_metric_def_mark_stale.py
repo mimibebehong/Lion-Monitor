@@ -37,7 +37,7 @@ def session(tmp_path):
 
 @pytest.fixture()
 def task(session):
-    row = tasks.create_task(session, name="定义默认值", operator="马哥")
+    row = tasks.create_task(session, name="定义默认值", operator="操作员")
     metric_def.seed_defaults(session, row.id)
     return row
 
@@ -165,7 +165,7 @@ def test_definition_change_is_written_to_change_log(session, task, batch):
     assert fields["params_default_json"].new_value["band_high"] == 500.0
     stale_row = fields["params_default_stale"]
     assert stale_row.new_value == 2
-    assert stale_row.actor == "马哥"
+    assert stale_row.actor == "操作员"
     assert "2 条指标值" in stale_row.note
 
 

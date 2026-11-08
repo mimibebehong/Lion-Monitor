@@ -27,7 +27,7 @@ def test_builtin_codes_all_declare_schema():
 
 
 def test_v_rms_schema_matches_agreed_defaults():
-    """马哥 2026-10-31 已定：带通 10–1000 Hz、时长 2 s、步长 2 s（不重叠）。"""
+    """2026-10-31 已定：带通 10–1000 Hz、时长 2 s、步长 2 s（不重叠）。"""
     schema = PARAM_SCHEMA["v_RMS"]
     assert [item["key"] for item in schema] == [
         "window_s",

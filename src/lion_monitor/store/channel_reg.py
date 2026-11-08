@@ -215,7 +215,7 @@ def sync_ownership(session: Session, task_id: int) -> int:
     - 挂在多个对象下时保留当前值（不在其中则取第一个）；
     - 树上已无该通道节点 → 置回自由态（object_id=NULL）。
 
-    马哥 2026-11-02：健康树上配置好了之后，台账里的装配关系要跟着更新。
+    2026-11-02：健康树上配置好了之后，台账里的装配关系要跟着更新。
     """
     from .models import TaskNode
 

@@ -1,4 +1,4 @@
-"""弹 Windows 原生「浏览文件夹」对话框（马哥 2026-11-03 定）。
+"""弹 Windows 原生「浏览文件夹」对话框（2026-11-03 定）。
 
 Streamlit 没有原生目录控件，网页也拿不到服务器路径，所以走服务端弹窗：
 用仓库里的 ``win_pick_folder.cs``（首次使用时用 csc 编译）调 ``FolderBrowserDialog``

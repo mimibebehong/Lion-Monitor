@@ -40,7 +40,7 @@ def channel_node(session, task):
     device = tree.create_node(session, task.id, "device", "卷绕产线", parent_id=root.id)
     comp = tree.create_node(session, task.id, "component", "轴承A", parent_id=device.id)
     channel = tree.create_node(session, task.id, "channel", "CH1", parent_id=comp.id)
-    # 参数卡落点是指标节点（马哥 2026-11-02）：先装配指标，再绑参数
+    # 参数卡落点是指标节点（2026-11-02）：先装配指标，再绑参数
     for code in ("v_RMS", "BPFO_1X"):
         tree.create_node(
             session,

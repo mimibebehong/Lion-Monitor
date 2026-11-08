@@ -117,7 +117,7 @@ def test_order_mark_lines_use_each_target_as_base():
 
 
 def test_order_mark_lines_cover_multiple_target_frequencies():
-    """多个目标频率：每个都按同一组阶次展开，group 用于同色（马哥 2026-11-03）。"""
+    """多个目标频率：每个都按同一组阶次展开，group 用于同色（2026-11-03）。"""
     marks = order_mark_lines([25.0, 100.0], [1.0, 2.0])
 
     assert [(mark.group, mark.freq_hz) for mark in marks] == [

@@ -124,7 +124,7 @@ def _render_add_channel(node, nodes, ch_pool, sensor_models) -> None:
     except (ChannelError, TreeError) as exc:
         ui.error(str(exc))
     else:
-        # 重跑后保持展开条打开，并把视口滚回这个节点（马哥：别刷新完弹回顶部）
+        # 重跑后保持展开条打开，并把视口滚回这个节点（现场：别刷新完弹回顶部）
         st.session_state[f"ht_addopen_{node.id}"] = True
         flash(f"已装配通道：{row_new.code}（传感器可挂到多个监测对象）")
         st.rerun()
@@ -265,7 +265,7 @@ def _apply_health(node: dict, health: dict[int, NodeHealth]) -> None:
     """把 ``features.health.node_health`` 的真实状态注入树快照。
 
     ``tree_ui.state_of`` 只认 ``node['state']``，不注入就一律回落「未设阈值」——
-    阈值明明配了、指标也有数据，页面上却全是「未设阈值」（马哥 2026-11-05 报的 bug）。
+    阈值明明配了、指标也有数据，页面上却全是「未设阈值」（2026-11-05 报的 bug）。
     指标层按最新值判级，设备/对象/通道沿子树汇总，阈值节点本身仍显示「—」。
     """
     item = health.get(int(node["id"]))
@@ -321,10 +321,10 @@ kpi_row(
 )
 
 # 低频功能用开关而不是 st.expander：Streamlit 的 expander 即使折叠也会把里面的控件
-# 全部执行一遍（导出模板还要查库），每点一次树就白算一次（马哥 2026-11-05 嫌卡）。
+# 全部执行一遍（导出模板还要查库），每点一次树就白算一次（2026-11-05 嫌卡）。
 if st.toggle("⚙ 批量工具：模板导入导出（低频操作，用时再打开）", value=False, key="ht_tools_open"):
     # ---------------------------------------------------------------- 模板导入 / 导出
-    # 一行三格等宽：导入模板 → 导出模板 → 包含阈值配置（马哥定的顺序与均分）
+    # 一行三格等宽：导入模板 → 导出模板 → 包含阈值配置（现场定的顺序与均分）
     col_import, col_export, col_thresh = st.columns(3, vertical_alignment="bottom")
 
     if snapshot is not None:

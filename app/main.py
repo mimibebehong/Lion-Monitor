@@ -78,14 +78,14 @@ with st.sidebar:
     st.caption("监测对象 / 传感器 / 指标配置 / 阈值设置 都属于当前任务，各自独立")
     st.divider()
 
-# 马哥 2026-11-05：页面里任何未捕获异常都要落盘（现场要能回溯）。
+# 2026-11-05：页面里任何未捕获异常都要落盘（现场要能回溯）。
 # Streamlit 自己只往终端打「Uncaught app execution」，服务模式没有终端就丢了；
 # 这里兜一层 —— 记录后原样抛出，页面上的报错框照常显示。
 # LION_PROFILE=1 时额外把每个页面的脚本耗时写进日志，用来定位「点一下要等好几秒」。
 _PROFILE = os.environ.get("LION_PROFILE") == "1"
 _page = st.navigation(NAV, position="sidebar")
 
-# 马哥 2026-11-05：点导航进另一个页面时，要回到这个页面的默认样子，
+# 2026-11-05：点导航进另一个页面时，要回到这个页面的默认样子，
 # 而不是上次离开时的样子（上次选中的树节点 / 展开状态 / 页签 / 筛选条件）。
 # 规则在 nav_state（纯 dict 逻辑，单测在 tests/test_nav_resets_page_state.py）。
 nav_state.reset_if_page_changed(

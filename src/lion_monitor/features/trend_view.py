@@ -1,6 +1,6 @@
 """趋势页时间窗 + 最小/最大保峰抽稀（P3 / G14，方案 §14.1 Q6）。
 
-口径（马哥拍板，Q6）：
+口径（现场拍板，Q6）：
 
 - 趋势页默认只看**最近 30 天**（``window_start(30)``）；选「全部」时返回 ``None``，不加时间条件；
 - 显示上限 2 000 点：不超过就原样画，超过才抽稀；
@@ -33,7 +33,7 @@ __all__ = [
     "window_start",
 ]
 
-#: 趋势图横坐标口径：北京时间 / 测试点数（马哥 2026-11-02）
+#: 趋势图横坐标口径：北京时间 / 测试点数（2026-11-02）
 X_MODE_TIME = "北京时间"
 X_MODE_INDEX = "测试点数"
 X_MODES = (X_MODE_TIME, X_MODE_INDEX)
@@ -59,7 +59,7 @@ def axis_points(rows: Sequence[ValueRow], mode: str = X_MODE_TIME) -> tuple[list
 
     - ``北京时间``：x 是壁钟时间（分秒可读），hover 也是同一个时间；
     - ``测试点数``：x 是 1,2,3…（只为排版整齐），**hover 仍然显示北京时间 + 值**，
-      所以数据点的信息量不变（马哥 2026-11-02）。
+      所以数据点的信息量不变（2026-11-02）。
     """
     moments = [beijing_moment(row.computed_at) for row in rows]
     labels = [moment.strftime(_STAMP_FMT) for moment in moments]

@@ -1,4 +1,4 @@
-"""指标节点内联阈值（马哥 2026-11-02：阈值跟着指标走，通道/对象级做批量）。"""
+"""指标节点内联阈值（2026-11-02：阈值跟着指标走，通道/对象级做批量）。"""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def _clear_all_limits(env):
 
 
 def test_inputs_blank_when_no_limit_anywhere(env):
-    """马哥 2026-11-03：删掉阈值后输入框不该显示 0.000（0 本身不合法）。"""
+    """2026-11-03：删掉阈值后输入框不该显示 0.000（0 本身不合法）。"""
     _clear_all_limits(env)
     at = _app(env)
 

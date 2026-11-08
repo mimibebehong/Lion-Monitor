@@ -42,7 +42,7 @@ st.markdown(
     ".rec .m{color:#8b949e}"
     ".tr-head .tr-meta{color:#9aa7b4;font-size:12.5px;margin-left:8px}"
     # 与「最近导入」折叠条标题完全一致（Streamlit 段落 0.82rem / #e6edf3 / 400）；
-    # 马哥 2026-11-04：流程完成度 9/9 与最近导入的字体颜色和大小保持一致
+    # 2026-11-04：流程完成度 9/9 与最近导入的字体颜色和大小保持一致
     ".tr-sub{font-size:0.82rem;color:#e6edf3;margin:6px 0 2px;font-weight:400}"
     # 含原始 HTML 的 markdown 容器带 margin-bottom:-16px，会把下面的九步条压上来
     '[data-testid="stMarkdownContainer"]:has(.tr-head){margin-bottom:0 !important}'
@@ -93,11 +93,11 @@ left, right = st.columns([0.5, 0.5])
 with left:
     section("待办")
     todos: list[tuple[str, str, str, str]] = []
-    # 振动超限：一个（监测对象 × 通道 × 指标）组合一条，字段顺序见马哥 2026-11-04 示例：
+    # 振动超限：一个（监测对象 × 通道 × 指标）组合一条，字段顺序见2026-11-04 示例：
     # 监测对象 · 监测通道 · 监测指标 · 超限等级 · 超限时间 · 超限点数
     for item in summary.over_todos:
-        # 状态三级（马哥 2026-11-04）：健康 / 预警 / 告警
-        # 等级文字不再染红/橙（马哥同日追加：恢复常态色，状态靠行首图标表达）
+        # 状态三级（2026-11-04）：健康 / 预警 / 告警
+        # 等级文字不再染红/橙（现场同日追加：恢复常态色，状态靠行首图标表达）
         level_text = "告警" if item.level == "alert" else "预警"
         # 每个字段一个 nowrap 块：窄屏只会在字段之间换行，不会把「超限时间」劈成两截
         fields = [
@@ -123,7 +123,7 @@ with left:
         todos.append(("阈值未设", f"{unset_n} 个指标节点还没有生效阈值", "/thresholds", "todo"))
 
     if todos:
-        # 马哥 2026-11-04：不要右侧按钮了，整行直接点进对应页面
+        # 2026-11-04：不要右侧按钮了，整行直接点进对应页面
         for title, desc, route, tone in todos:
             icon = {"warn": "🟠", "alert": "🔴", "todo": "⚪", "done": "✅"}[tone]
             st.markdown(
@@ -140,7 +140,7 @@ with right:
     done_steps = sum(1 for _code, _name, state in summary.steps if state == "done")
     total_steps = len(summary.steps)
     # 任务信息与「流程完成度」标题合成**一个** markdown 块：
-    # 拆开时含 HTML 的容器各带 margin-bottom:-16px，会互相压住（马哥 2026-11-04 报的重叠）。
+    # 拆开时含 HTML 的容器各带 margin-bottom:-16px，会互相压住（2026-11-04 报的重叠）。
     st.markdown(
         f"<div class='tr-head'><b>{task.code} · {task.name}</b>"
         f"<span class='tr-meta'>操作人 {task.operator} · 创建"
@@ -154,11 +154,11 @@ with right:
         wrap=True,
     )
 
-    # 最近导入（马哥 2026-11-04：并入任务概览；次要信息默认折叠）
+    # 最近导入（2026-11-04：并入任务概览；次要信息默认折叠）
     if not recent:
         st.caption("最近导入：还没有导入数据集，去「数据接入」导入采集目录")
     else:
-        # 马哥 2026-11-04：默认展开（此前默认折叠）
+        # 2026-11-04：默认展开（此前默认折叠）
         with st.expander(
             f"最近导入 · {len(recent)} 条（共 {summary.dataset_count} 个数据集）",
             expanded=True,

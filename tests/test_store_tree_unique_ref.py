@@ -1,4 +1,4 @@
-"""装配唯一性按 ref_id 判定（马哥 2026-11-02）；名字只是显示缓存，不能拿来挡重复。"""
+"""装配唯一性按 ref_id 判定（2026-11-02）；名字只是显示缓存，不能拿来挡重复。"""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def test_same_object_cannot_be_assembled_under_another_device(env):
 
 
 def test_same_channel_can_be_assembled_under_several_components(env):
-    """同一台传感器通道可以挂到多个监测对象下（马哥 2026-11-02 口径）。"""
+    """同一台传感器通道可以挂到多个监测对象下（2026-11-02 口径）。"""
     with env["factory"]() as session:
         comp = _component(session, env, env["device"])
         tree.create_node(

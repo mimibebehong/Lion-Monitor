@@ -1,6 +1,6 @@
 """任务列表：保存 / 设为当前任务 / 归档 / 删除 同一排，且删除只有一个入口。
 
-马哥 2026-11-02：
+2026-11-02：
 - 「为什么有两个删除」→ 去掉「确认删除」勾选框，改成同一个按钮点两次确认；
 - 「保存修改、设为当前任务、归档、删除任务放到一行」→ 四个等宽按钮同一排。
 """
@@ -103,7 +103,7 @@ def test_section_is_named_edit_and_actions(env):
 
 
 def test_four_buttons_have_no_extra_color_by_default(env):
-    """马哥：正常态四个按钮都不加配色，只有悬停/按下才变蓝。"""
+    """现场：正常态四个按钮都不加配色，只有悬停/按下才变蓝。"""
     at = _app_with_selection(env)
     for key in ("save_1", "make_current_1", "archive_1", "delete_1"):
         assert at.button(key=key).proto.type != "primary", f"{key} 正常态不应是主色"
@@ -134,7 +134,7 @@ def test_switch_current_task_uses_shared_flash(env):
 
 
 def test_new_task_comes_with_builtin_metrics(env):
-    """马哥 2026-11-03：新建任务默认补齐三个内置指标，页面不再需要「补齐内置指标」按钮。"""
+    """2026-11-03：新建任务默认补齐三个内置指标，页面不再需要「补齐内置指标」按钮。"""
     from streamlit.testing.v1 import AppTest
 
     from lion_monitor.store import metric_def

@@ -1,6 +1,6 @@
-"""工作台「设备健康状态」改数字孪生卡片（马哥 2026-11-04）。
+"""工作台「设备健康状态」改数字孪生卡片（2026-11-04）。
 
-马哥三条要求对应的可自动化验的口径：
+现场三条要求对应的可自动化验的口径：
 
 1. **布局有重叠** —— 九步条原来是 9 个 `st.container` 式卡片（手写 div + `st.columns`），
    在紧凑间距下容器算 66px、实际只分配 57px，压到下面 KPI 的 9px。改成**一整块 HTML 流程条**
@@ -200,7 +200,7 @@ def test_twin_card_maps_state_to_color_and_label():
     html = captured[0]
     assert "twin-card" in html
     assert "--c:#fb8c00" in html  # 对象卡片用 warn 色
-    assert "--pc:#6b7684" in html  # 测点徽标统一常态灰点（马哥 2026-11-04 去红）
+    assert "--pc:#6b7684" in html  # 测点徽标统一常态灰点（2026-11-04 去红）
     assert "🟠 预警" in html
     assert "指标 3 · 超限 1 · 待 2" in html
 
@@ -221,7 +221,7 @@ def test_home_renders_twin_card_with_object_channels_and_state(env):
     assert "未设阈值" in html or "正常" in html
 
 
-# ---------------------------------------------------------------- 对象图（马哥 2026-11-04）
+# ---------------------------------------------------------------- 对象图（2026-11-04）
 
 
 def test_object_images_exist_for_all_four_objects():
@@ -315,7 +315,7 @@ def test_twin_card_without_image_degrades_to_text():
     assert "twin-badge inline" in html  # 但状态徽标不能丢，退回行内右对齐
 
 
-# ---------------------------------------------------------------- 健康度（马哥 2026-11-04）
+# ---------------------------------------------------------------- 健康度（2026-11-04）
 
 
 def test_twin_card_shows_health_score_not_raw_metric():
@@ -424,7 +424,7 @@ def test_twin_card_tiny_health_score_shows_less_than():
 
 
 def test_twin_card_border_turns_state_color_when_warn_or_alert():
-    """马哥 2026-11-04：预警 / 告警时卡片外框整体变色，不只是左侧色条。"""
+    """2026-11-04：预警 / 告警时卡片外框整体变色，不只是左侧色条。"""
 
     from ui import TWIN_CSS
 
@@ -448,7 +448,7 @@ def test_twin_state_labels_are_three_levels():
 
 
 def test_point_dot_and_health_number_use_plain_color():
-    """马哥 2026-11-04：测点徽标红点、健康度 1.00 的红色都恢复正常色。
+    """2026-11-04：测点徽标红点、健康度 1.00 的红色都恢复正常色。
 
     状态仍由卡片外框（st-warn / st-alert）与图上徽标表达。
     """

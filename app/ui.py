@@ -23,7 +23,7 @@ if TYPE_CHECKING:  # pandas 只在类型标注里用：顶层 import 会让首�
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 
 
-# 马哥 2026-11-05：日志必须任何入口都初始化。
+# 2026-11-05：日志必须任何入口都初始化。
 # Streamlit 直接访问某个页面 URL（如 /ingest）时不会执行 app/main.py，只执行 pages/ingest.py，
 # 结果 main.py 里的 setup_logging 被跳过、logs/lion-monitor.log 完全不写（实测 trace 为空）。
 # ui 被每个页面 import，放在这里保证无论从哪个入口进来日志都落盘。
@@ -99,7 +99,7 @@ SCROLL_MEMORY_HTML = """
     if (m) store.setItem(key(), String(Math.round(m.scrollTop)));
   };
 
-  // ---- tab 记忆：Streamlit 重跑后 st.tabs 会回到第一个页签（马哥 2026-11-03 要求回到原 tab）----
+  // ---- tab 记忆：Streamlit 重跑后 st.tabs 会回到第一个页签（2026-11-03 要求回到原 tab）----
   const tabGroups = () => [...doc.querySelectorAll('[data-testid="stTabs"]')];
   const tabStoreKey = (group, index) => {
     const hit = (group.className || "").toString().match(/st-key-([\\w-]+)/);
@@ -149,7 +149,7 @@ SCROLL_MEMORY_HTML = """
 """
 
 
-#: 全局按钮样式：正常态不加配色，悬停 / 按下 / 键盘聚焦才变蓝（马哥 2026-11-03 定为全站口径）
+#: 全局按钮样式：正常态不加配色，悬停 / 按下 / 键盘聚焦才变蓝（2026-11-03 定为全站口径）
 BUTTON_STYLE_CSS = """
 <style>
 [data-testid="stMainBlockContainer"] .stButton > button:not(:disabled):hover,
@@ -206,7 +206,7 @@ def page_header(
     with right:
         # 三个标签必须放在**同一个 markdown 块**里：
         # Streamlit 给「含原始 HTML 的 markdown 容器」加了 margin-bottom:-16px，
-        # 拆成多个 st.markdown 时父层只分配 24px，两行标签会互相压住（马哥 2026-11-04 截图重叠）。
+        # 拆成多个 st.markdown 时父层只分配 24px，两行标签会互相压住（2026-11-04 截图重叠）。
         chip = _task_chip()
         parts: list[str] = []
         if chip:
@@ -240,9 +240,9 @@ def stepper(
     """九步工作流进度条：**一整块 HTML**（单次 markdown、固定行高、flex 均分）。
 
     不用 st.columns 逐块排版 —— 九块卡片在紧凑间距下争高度，容器算 66px、
-    实际只分到 57px，会压到下面 KPI 的头 9px（马哥 2026-11-04 报的重叠）。
+    实际只分到 57px，会压到下面 KPI 的头 9px（2026-11-04 报的重叠）。
 
-    ``wrap=True``：给半宽栏用（马哥 2026-11-04 把九步条移进「流程完成度」）——
+    ``wrap=True``：给半宽栏用（2026-11-04 把九步条移进「流程完成度」）——
     卡片不再均分宽度，改按内容撑开、放不下就整块换行，条高随内容 auto。
     """
     state = state or {}
@@ -305,7 +305,7 @@ border-radius:6px;overflow:hidden;background:#0d1117;border:1px solid #2a3441;ma
 .twin-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
 transition:opacity .14s ease}
 .twin-img.ph{opacity:0}
-/* 马哥 2026-11-04：预警 / 告警时卡片外框整体变色，不只是左侧色条 */
+/* 2026-11-04：预警 / 告警时卡片外框整体变色，不只是左侧色条 */
 .twin-card.st-warn{border-color:#fb8c00;box-shadow:0 0 0 1px rgba(251,140,0,.28)}
 .twin-card.st-alert{border-color:#d93a3a;box-shadow:0 0 0 1px rgba(217,58,58,.28)}
 .twin-fig:hover .twin-img.ph{opacity:1}
@@ -340,7 +340,7 @@ font-variant-numeric:tabular-nums;line-height:1.35}
 
 
 #: 监测对象 → 示意图/实拍图关键字（按顺序匹配对象名，先匹配到先用）。
-#: 图片来自马哥提供的「监测对象与测点安装关系」图，切好放 app/assets/objects/。
+#: 图片来自现场提供的「监测对象与测点安装关系」图，切好放 app/assets/objects/。
 OBJECT_IMAGE_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("diaphragm_roller", ("隔膜", "过辊")),
     ("infeed_motor", ("牵引", "入片")),
@@ -387,12 +387,12 @@ def _figure_html(name: str, color: str, badge: str) -> str:
 
 def _point_html(channel) -> str:
     """测点小徽标：状态色点 + 通道名。"""
-    # 马哥 2026-11-04：测点徽标不再按状态染红/橙，统一用常态灰点；
+    # 2026-11-04：测点徽标不再按状态染红/橙，统一用常态灰点；
     # 状态仍由卡片外框 + 图上徽标表达，避免一行里到处是红点。
     return f"<span class='pt' style='--pc:#6b7684'><i></i>{channel.name}</span>"
 
 
-#: 健康度口径（悬停说明，马哥 2026-11-04）
+#: 健康度口径（悬停说明，2026-11-04）
 HEALTH_HINT = "健康度 = 该对象最新 5 个有效指标点的 mean(指标值 / 阈值)；1.00 = 踩到严重阈值"
 
 
@@ -408,7 +408,7 @@ def _health_html(obj) -> str:
             "<span class='lab'>健康度</span><span class='dash'>—</span></div>"
         )
     score = float(obj.health_score)
-    # 马哥 2026-11-04：健康度数字恢复常态色，不再按 0.8 / 1.0 分档染橙/红
+    # 2026-11-04：健康度数字恢复常态色，不再按 0.8 / 1.0 分档染橙/红
     color = "#e6edf3"
     # 比值可能远小于 0.01（指标量级比阈值小很多），别显示成 0.00 假装没值
     text = "&lt;0.01" if 0 < score < 0.01 else f"{score:.2f}"
@@ -517,7 +517,7 @@ def section(title: str, note: str = "") -> None:
 def hint(text: str, icon: str = "ℹ️") -> None:
     """整行提示块：左侧亮色边线 + 灰字小行高，用来放口径说明这类长文字。
 
-    马哥 2026-11-03：「提示性文字设计美观点」——长说明不要塞在窄列里跟按钮抢宽度，
+    2026-11-03：「提示性文字设计美观点」——长说明不要塞在窄列里跟按钮抢宽度，
     也不要跟短标签用同一种 caption 样式。整行、浅底、左侧 3px 亮蓝边线，读起来像注释而不像报错。
     """
     body = str(text).replace("\n", "<br>")
@@ -537,7 +537,7 @@ def flash(message: str, icon: str = "✅", key: str = "ui_flash", tone: str = "s
     ``tone`` 决定显示成哪种提示框：``success``（默认）/ ``warning`` / ``error``
     —— 例如「整批没有有效文件」不该显示成绿色成功框。
 
-    马哥 2026-11-05：报错信息都要进日志（方便日后运维），所以 error / warning
+    2026-11-05：报错信息都要进日志（方便日后运维），所以 error / warning
     的提示在这里统一记一条 ``WARNING``（页面上的提示文案 + 调用位置一起留痕）。
     """
     if tone in ("error", "warning"):
@@ -546,7 +546,7 @@ def flash(message: str, icon: str = "✅", key: str = "ui_flash", tone: str = "s
 
 
 def error(message: str, icon: str = "🚨") -> None:
-    """页面红框报错：显示 + 落盘（马哥 2026-11-05「报错信息都要进 log」）。"""
+    """页面红框报错：显示 + 落盘（2026-11-05「报错信息都要进 log」）。"""
     _LOG.error("界面报错: %s", message, stacklevel=2)
     st.error(message, icon=icon)
 
@@ -608,7 +608,7 @@ DANGER_COLOR = "#d93a3a"
 
 
 COMPACT_CSS = """<style>
-/* 紧凑版式（马哥 2026-11-03：数据分析页绘图区不滚动就能看见）。
+/* 紧凑版式（2026-11-03：数据分析页绘图区不滚动就能看见）。
    只由显式调用 compact_css() 的页面注入 —— 别的页面照旧宽松。
    选择器全走 data-testid，Streamlit 大版本升级后万一失效，效果只是「回到原来的间距」，不坏功能。 */
 [data-testid="stMainBlockContainer"] { padding-top: 4rem; padding-bottom: 0; }

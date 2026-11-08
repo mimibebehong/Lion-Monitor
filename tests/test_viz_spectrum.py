@@ -36,7 +36,7 @@ def test_main_peak_marked_with_circle():
 
     markers = [trace for trace in fig.data if "markers" in trace.mode]
     assert len(markers) == 1
-    assert markers[0].marker.symbol == "circle", "标记点用圆点，不用三角形（马哥 2026-11-03）"
+    assert markers[0].marker.symbol == "circle", "标记点用圆点，不用三角形（2026-11-03）"
     assert "●" in markers[0].text[0]
     assert "145" in markers[0].text[0]
     assert float(np.asarray(markers[0].x)[0]) == pytest.approx(145.0, abs=0.2)

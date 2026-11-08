@@ -132,7 +132,7 @@ def test_trend_page_marks_stale_points_and_caption_counts_them(trend_app):
 
 
 def test_trend_page_has_recompute_button_with_confirm_hint(trend_app):
-    """按钮在，且不再用文字预估（马哥 2026-11-03 改成点击后走进度条）。"""
+    """按钮在，且不再用文字预估（2026-11-03 改成点击后走进度条）。"""
     buttons = [btn for btn in trend_app.button if btn.label == "重算本节点"]
     assert buttons, "趋势页应有「重算本节点」按钮"
     captions = "\n".join(item.value for item in trend_app.caption)
@@ -140,7 +140,7 @@ def test_trend_page_has_recompute_button_with_confirm_hint(trend_app):
 
 
 def test_trend_page_has_no_confirm_checkbox(trend_app):
-    """马哥 2026-11-03：确认重算不再用勾选框，改二次点击（与任务页删除一致）。"""
+    """2026-11-03：确认重算不再用勾选框，改二次点击（与任务页删除一致）。"""
     labels = [box.label for box in trend_app.checkbox]
     assert "确认重算" not in labels, labels
 
@@ -201,7 +201,7 @@ def test_home_shows_pending_stale_count(db_with_stale_values):
     """验收 3：工作台显示待重算条数。
 
     v7（2026-11-03）紧凑化后只留 KPI 卡这一处：卡片值 = 条数，长口径在卡片 ⓘ 悬停里，
-    不再额外用一行 caption 复述（马哥「次要信息可适当删除」）。
+    不再额外用一行 caption 复述（现场「次要信息可适当删除」）。
     """
     import store_ctx  # noqa: E402
     from streamlit.testing.v1 import AppTest  # noqa: E402

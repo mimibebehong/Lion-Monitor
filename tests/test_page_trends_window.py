@@ -127,7 +127,7 @@ def test_trend_page_defaults_to_thirty_day_window_and_decimates(db_with_series):
 
 
 def test_export_button_shares_row_with_recompute():
-    """马哥 2026-11-04：导出逐点数据 CSV 与「重算本节点」放在同一行。
+    """2026-11-04：导出逐点数据 CSV 与「重算本节点」放在同一行。
 
     实现：_recompute_block 接受 export=(文件名, CSV)，用 [0.40, 0.34, 0.26] 三列渲染 ——
     左列留给提示/进度条、中间导出、右侧重算。

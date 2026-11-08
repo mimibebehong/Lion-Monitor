@@ -187,7 +187,7 @@ def test_legacy_reversed_lower_row_is_flagged_not_silently_changed(db_with_tree)
 
 
 # ---------------------------------------------------------------- 单边设置
-# 马哥 2026-11-04：可以只设 warn 或只设 alert，留空的一档记 0 = 该档不判。
+# 2026-11-04：可以只设 warn 或只设 alert，留空的一档记 0 = 该档不判。
 
 
 def test_warn_only_saves_with_alert_zero(db_with_tree):

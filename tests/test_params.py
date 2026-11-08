@@ -16,7 +16,7 @@ def test_default_params_for_builtin_codes():
         "window_fn": "rect",
         "detrend": True,
     }
-    # a_RMS 自 2026-11-02 起也带通（马哥要求），a_Peak 仍是纯时域峰值
+    # a_RMS 自 2026-11-02 起也带通（现场要求），a_Peak 仍是纯时域峰值
     assert default_params("a_RMS") == {
         "window_s": 2.0,
         "step_s": 2.0,

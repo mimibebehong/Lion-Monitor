@@ -1,6 +1,6 @@
 """a_RMS 加 band_low / band_high：声明、默认值、老库迁移、计算都走带通。
 
-马哥 2026-11-02：a_RMS 指标也要有滤波设置，band_low 和 band_high 设置。
+2026-11-02：a_RMS 指标也要有滤波设置，band_low 和 band_high 设置。
 """
 
 from __future__ import annotations
