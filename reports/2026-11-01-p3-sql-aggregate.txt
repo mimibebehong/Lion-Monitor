@@ -1,0 +1,133 @@
+Lion-Monitor　P3 / S2 落地证据：工作台 / 健康树改 SQL 聚合 + 去掉 path_nodes N+1
+卡片：t_3d0434b7（工作台/健康树改 SQL 聚合并消除 path_nodes N+1，TDD）
+时间：2026-11-01 19:35（CST）　分支：master
+
+================================================================================
+一、改了什么（口径一行没动）
+================================================================================
+1. store/metrics.py 新增 SQL 聚合入口（都只发固定几条语句，不随点数增长）：
+   - SeriesScope(shannel_node_id, channel_code, code, include_unattributed) —— 一条序列的取数范围
+   - SeriesRequest(scope, limit) —— 序列 + 它自己的生效阈值
+   - series_stats_batch()  → 计数 / warn 数 / alert 数 / 最新一行
+        同一阈值：GROUP BY 计数一条（带条件 SUM 算越限）+ 窗口函数取最新一条 = 2 条 SQL
+        阈值不同：计数一条 + 每个阈值一条 + 最新一条
+   - series_counts()      → 每条序列行数（九步 ⑨「至少两个点」用，1 条 SQL）
+   - over_values() / over_values_for_scopes() → 只取越过 warn 的行（阈值条件下推 SQL）
+   - list_values(..., since=) —— 给趋势页 30 天窗口留的入口（Q6，页面接线属 t_873255f7）
+   非有限值（±Inf）在 SQL 里就挡掉（value 必须在 ±sys.float_info.max 之间），
+   与 limits_rules.grade / features.health.point_level 口径一致：先判 alert，命中即 alert，
+   warn_count 只算「越过 warn 未到 alert」。
+
+2. features/health.py：node_health 不再逐节点查祖先链、不再拉整串点
+   - 树读一次；阈值用 limits.resolve_limits()（一次取全量阈值行 + 内存沿父链继承）
+   - 最新值 / 越限条数走 series_stats_batch（指标节点的父节点就是通道节点，层级固定）
+   - 向上汇总按 path 深度倒序（父在子后），不再逐节点 tree.path_nodes
+
+3. features/overview.py：
+   - over_records：按生效阈值分组，每组一条 SQL 只取越限行；去重键仍是
+     「通道节点 × 指标 × 计算点」（P2 / S1）
+   - health_counts / device_overviews 复用 task_overview 里算好的那次 node_health
+   - step_states ⑨ 改用 series_counts（不再拉整串点）
+   - 返回结构（OverRecord / DeviceOverview / TaskOverview / steps）与页面完全兼容
+
+4. features/series.py：新增 metric_scopes()（纯树结构算范围，不拉值）；
+   metric_series() 改为基于它（原实现每个指标节点都要 path_nodes 查一次祖先链）。
+
+5. store/limits.py：list_limits(nodes=) 可复用已读的树；新增 resolve_limits() 批量继承。
+
+================================================================================
+二、语句数实测（小库探针，与点数无关）
+================================================================================
+入口                          改造后      改造前（原实现）
+health.node_health             4 条        每个指标节点：1 次 path_nodes(内含 2 条) + 1 次阈值查询
+                                          + 1 次整串值查询；上层节点再各自 path_nodes
+overview.over_records          3 条        1 次整串值/序列 + 每指标 1 次 path_nodes + 1 次阈值
+overview.step_states          12 条        同 over_records 的整串值拉取
+overview.task_overview        27 条        200 点 × 3 序列时曾上千条（见 t_3aa… 之前记录）
+
+用例守卫（新增，先红后绿）：
+- tests/test_features_health_sql_aggregate.py::test_health_statement_count_is_bounded  ≤ 20 条
+- tests/test_features_overview_sql_aggregate.py::test_task_overview_statement_count_is_bounded ≤ 60 条
+- test_health_does_not_walk_the_ancestor_chain_per_node —— monkeypatch tree.path_nodes 必须不被调用
+- test_*_does_not_pull_every_value_row —— monkeypatch series.metric_series 必须不被调用
+- tests/test_store_metrics_series_stats.py::test_stats_runs_aggregate_statement_instead_of_pulling_every_row
+  300 点 ≤ 2 条语句、且含 count(
+
+================================================================================
+三、24 万行实测（scripts/bench_pages.py --rows 240000，各 1 次）
+================================================================================
+指标                                      改造前        改造后        变化
+dashboard.task_overview                 38 737.8 ms   2 114.4 ms    -94.5%（约 18×）
+tree.list_nodes+tree_snapshot                1.4 ms       0.9 ms   —
+tree.node_health（整树判级）              9 685.9 ms   1 032.6 ms    -89.3%（约 9.4×）
+trend.list_values（CH1·v_RMS，2 万点）       711.2 ms     720.1 ms   持平（本卡未改趋势取数）
+trend.chart_build（2 万点）                    8.4 ms       6.8 ms   —
+trend.export_rows（CSV 2 万行）               33.1 ms      31.6 ms   —
+
+超限记录条数：40 752 条（与改造前一致——同样的逐点口径）
+基线：reports/bench-2026-11-01-baseline.json　本次：reports/bench-2026-11-01-s2-after.json
+
+【未达标说明】验收线是工作台 <1.5 s、健康树 <1 s，目前 2.11 s / 1.03 s —— 还差一口气。
+原因不是"还在 Python 里遍历"，而是**库上还没有复合索引**：24 万行的 GROUP BY / 窗口函数
+目前是一次全表扫描 + 临时排序。索引任务（t_100e6ac4）未合入，合入后应能落到线上。
+分项耗时（同一 24 万行库，见第四节）显示剩下的时间集中在两条聚合语句上：
+  series_stats_batch（12 序列，计数 + 窗口取最新） 约 1 041 ms
+  over_records（筛出 40 752 条越限行 + 组装 ValueRow）约 803 ms
+  step_states（series_counts 一条 GROUP BY）      约 242 ms
+
+================================================================================
+四、实际查询模式与建议索引（交给 t_100e6ac4）
+================================================================================
+表 metric_value 上现在的语句形态（全部经 channel/dataset 三表 JOIN 过滤任务与软删）：
+
+A) 计数 / 越限计数（health.node_health、overview.step_states、series.stats）
+   SELECT coalesce(metric_value.node_id, -1) AS node_key,
+          channel.code AS channel_code, metric_value.code AS metric_code,
+          count(*) AS rows,
+          sum(CASE WHEN value 有限 AND value >= :warn  THEN 1 ELSE 0 END) AS warn_hits,
+          sum(CASE WHEN value 有限 AND value >= :alert THEN 1 ELSE 0 END) AS alert_hits
+     FROM metric_value JOIN channel ON channel.id = metric_value.channel_id
+                      JOIN dataset ON dataset.id = channel.dataset_id
+    WHERE dataset.task_id = :task AND dataset.deleted_at IS NULL
+      AND channel.deleted_at IS NULL AND metric_value.deleted_at IS NULL
+      AND metric_value.code IN (:codes)
+      AND (metric_value.node_id IN (:node_ids)
+           OR (metric_value.node_id IS NULL AND channel.code IN (:legacy_codes)))
+    GROUP BY coalesce(metric_value.node_id, -1), channel.code, metric_value.code
+   → 建议索引 idx_metric_value_node_code_time ON metric_value(node_id, code, computed_at)
+     （覆盖 WHERE 的 node_id IN + code IN，且 computed_at 让 B) 的取最新走索引序）
+
+B) 取每组最新一行（health 的 latest_value / latest_state）
+   SELECT ..., row_number() OVER (PARTITION BY coalesce(node_id,-1), channel.code, code
+                                  ORDER BY computed_at DESC, id DESC) AS rn ...
+     ... 同上 WHERE ... 外层 WHERE rn = 1
+   → 同一索引 (node_id, code, computed_at DESC) 可让 PARTITION/ORDER 免排序（SQLite 用索引序）
+
+C) 越限明细（overview.over_records、metrics.over_values）
+   SELECT id, channel_id, node_id, channel.code, dataset.id, code, value, unit, computed_at, ...
+     FROM metric_value JOIN ... WHERE <同上作用域> AND value 有限 AND value >= :warn
+    ORDER BY computed_at, id
+   → 选择性来自 value 条件；索引 (node_id, code, computed_at) 可先按作用域收窄，
+     再逐行判 value（比全表扫好），ORDER BY 的排序量也从 24 万降到命中行数
+
+D) 趋势取数（trend.list_values，未改）
+   ... WHERE dataset.task_id AND channel.code = :code AND metric_value.code = :code
+       [AND node_id = :node] [AND computed_at >= :since] ORDER BY computed_at, id
+   → 建议 (node_id, code, computed_at) 与 (channel_id, code, computed_at) 两条
+     （这条也顺带解决趋势页 <300 ms 的目标；Q6 的 since 参数本卡已加到 store 层）
+
+================================================================================
+五、验证记录
+================================================================================
+- 先红：新增 3 个用例文件（25 条）在改造前 15 条 FAIL（ImportError / 无 series_stats / 无 since）
+- 后绿：tests/test_store_metrics_series_stats.py、test_features_health_sql_aggregate.py、
+        test_features_overview_sql_aggregate.py —— 25 passed
+- 全量：python -m pytest tests --ignore=tests/test_features_trend_window.py → 564 passed（199 s）
+  说明：test_features_trend_window.py 属趋势卡片 t_873255f7（依赖尚未实现的 features.trend_view），
+        本卡不提交该文件，留作下一卡先红用例。
+- ruff format + ruff check src app tests scripts → All checks passed
+- 页面实测（bash scripts/dev_serve.sh 8599 + browser_exec）：
+  工作台：九步 9/9、超限记录 3 条（0 警告 / 3 严重）、设备健康 严重 1、待办「幅值越限 CH2 v_RMS 10.53」
+  健康树配置页：21 节点 / 12 指标渲染正常
+  趋势页：整树枝状态由 node_health 驱动（CH2 v_RMS 严重 → CH2 → 对象 → 设备 逐级 严重），
+          每个子图「共 3 个点」、阈值线 2.8 / 4.5（指标级）都在

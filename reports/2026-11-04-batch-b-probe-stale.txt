@@ -1,0 +1,26 @@
+=== B-2 定义默认值 → stale 探针（临时库）===
+改默认值 band_high 1000→300:
+  stale_改前 = 0
+  stale_改后 = 3
+  update_metric 返回 stale_marked = 3
+  跟随定义节点生效 band_high = 300.0
+  固化节点生效 band_high（应仍 1000） = 1000.0
+  change_log 字段 = ['params_default_json', 'params_default_stale']
+改回 band_high 300→1000:
+  update_metric 返回 stale_marked（已标过，应 0） = 0
+  stale 总数（仍是 3 条，未重复标记） = 3
+
+=== B-3 判级跳过 stale 探针（临时库）===
+场景1 全部 stale+越限:
+  state = unset
+  over_count = 0
+  stale_count = 2
+  needs_recompute = True
+  latest_value = None
+场景2 3 stale + 2 有效超限:
+  state = alert
+  over_count = 2
+  stale_count = 3
+  健康树 stale 汇总（device） = 3
+  趋势页 count_stale(task) = 3
+  超限记录条数（不含 stale） = 2

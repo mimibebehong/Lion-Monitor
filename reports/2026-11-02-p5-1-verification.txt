@@ -1,0 +1,153 @@
+P5-1 验收证据（S6：params_hash 补全指标码 / 采样率 / 夹紧后生效带通）
+=====================================================================
+项目：/home/administrator/workspace/projects/Lion-Monitor
+日期：2026-11-02
+提交：1457da6、6485267（+ 本报告提交）
+
+一、改了什么（前后对比）
+-----------------------
+1. 夹紧口径下沉到一处（新增，src/lion_monitor/params.py）
+   - 新增常量 `BAND_CLAMP_RATIO = 0.95`（实际生效带通上限 = fs/2 × 0.95）
+   - 新增 `effective_params(params, sample_rate=None)`：返回**夹紧后**的生效参数副本
+     （上限超了夹到 `round(fs/2*0.95, 9)`，不超原样；采样率未知时不夹紧）。
+   - 新增 `effective_params_json(params, sample_rate=None)`：紧凑 JSON（键排序），落库快照用。
+   - `params_hash` 签名：`params_hash(params, code="", sample_rate=None)`
+     前：`sha1(用户填的参数字典)` 前 12 位
+     后：`sha1({"code": 指标码, "fs": fs, "params": 夹紧后的生效参数})` 前 12 位
+     空参数仍返回空串（历史行可区分）。
+   - `src/lion_monitor/features/metrics.py:_band_filter` 原来自己写 `min(high, nyquist*0.95)`，
+     改为调 `effective_params`——计算层与指纹层只有一份夹紧逻辑，不会再各写一份。
+
+2. 指纹/快照按文件采样率现算（src/lion_monitor/features/pipeline.py）
+   - `MetricJob` 删掉 `params_hash` 字段与 `dedupe_key` 属性（建任务时还不知道 fs，
+     定死就会算错），改为三个方法：
+       `params_hash_for(sample_rate)` / `dedupe_key_for(sample_rate)` /
+       `effective_params_json(sample_rate)`
+   - `_import_batch_inner` 的文件循环里：`sample_rate = float(record.meta.sample_rate_hz)`，
+     去重键与落库指纹都用这一份；`NodeValue` 同时写 `params_hash` 与 `effective_params_json`。
+
+3. 落库列（src/lion_monitor/store/{models,db,metrics}.py）
+   - `metric_value.effective_params_json TEXT DEFAULT ''`（`MetricValue` 新列）
+   - `db._add_metric_value_trace` 增加幂等 `ALTER TABLE ... ADD COLUMN`；
+     `_METRIC_VALUE_COLUMNS` 加入该列，整表重建（老库换唯一约束那条路）也能搬过去
+   - `NodeValue` 新字段 `effective_params_json: str = ""`；`upsert_node_values` 落库；
+     老接口 `upsert_values` 不传 → 写空串（行为不变）
+   - 文档同步：docs/plans/2026-10-31-指标参数体系与频率参数设计.md（2.3 建表口径、5.2 追溯）
+
+二、TDD：先 RED 再 GREEN（真实输出）
+------------------------------------
+RED（实现前，先写的两个测试文件）
+  $ .venv/bin/python -m pytest tests/test_params_hash_effective.py
+  ...
+  tests/test_params_hash_effective.py:19: in <module>
+      from lion_monitor.params import default_params, effective_params, params_hash
+  E   ImportError: cannot import name 'effective_params' from 'lion_monitor.params'
+  =========================== short test summary info ============================
+  ERROR tests/test_params_hash_effective.py
+  !!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+  1 error in 1.37s
+
+  $ .venv/bin/python -m pytest tests/test_features_pipeline_effective_params.py
+  ...
+  E           AssertionError: assert 'effective_params_json' in {'id': (0, 'id', 'INTEGER', 0, None, 1),
+              'channel_id': (1, 'channel_id', 'INTEGER', 1, None, 0), 'node_id': (2, 'node_id',
+              'INTEGER', 0, None, 0), 'code': (3, 'code', 'VARCHAR(32)', 1, None, 0), ...}
+  tests/test_features_pipeline_effective_params.py:193: AssertionError
+  =========================== short test summary info ============================
+  FAILED tests/test_features_pipeline_effective_params.py::test_value_row_carries_clamped_effective_band
+  FAILED tests/test_features_pipeline_effective_params.py::test_value_row_hash_includes_code_and_sample_rate
+  FAILED tests/test_features_pipeline_effective_params.py::test_nodes_with_bands_clamping_to_same_limit_dedupe
+  FAILED tests/test_features_pipeline_effective_params.py::test_metric_value_has_effective_params_column
+  FAILED tests/test_features_pipeline_effective_params.py::test_legacy_table_gains_blank_effective_params_column
+  5 failed in 4.19s
+
+GREEN（实现后）
+  $ .venv/bin/python -m pytest tests/test_params_hash_effective.py tests/test_features_pipeline_effective_params.py
+  ...............                                                          [100%]
+  15 passed in 3.67s
+  NEWCASE_EXIT=0
+
+三、验收项逐条（真实命令输出）
+------------------------------
+探针脚本：/home/administrator/.hermes/profiles/coding-copilot/cache/scratch/p51_probe.py
+  $ .venv/bin/python <探针>; echo EXIT=$?
+
+=== 1) 夹紧后的生效带通（fs=32000 → 上限 15200） ===
+  band_high=16000 → 生效 15200.0
+  band_high=30000 → 生效 15200.0
+  effective_params_json(30000) = {"band_low": 10.0, "band_high": 15200.0}
+
+=== 2) 验收 1：夹紧结果相同 → 指纹相同 ===
+  band_high=16000 → params_hash=ddfbe50757ba
+  band_high=30000 → params_hash=ddfbe50757ba
+  相同？ True                                        【验收 1 通过】
+
+=== 3) 验收 2：同参数不同 fs → 指纹不同 ===
+  fs=16000 → 4e1dee768d5e（生效上限 1000.0）
+  fs=32000 → 1301f9fa0331（生效上限 1000.0）
+  不同？ True                                        【验收 2 通过】
+
+=== 4) 验收 3：同参数不同指标码 → 指纹不同 ===
+  a_Peak → 54da08cd5e31   a_RMS → ec0de5e7b450   不同？ True   【验收 3 通过】
+
+=== 5) 跨进程稳定（另起解释器算同一输入） ===
+  本进程 ddfbe50757ba / 子进程 ddfbe50757ba → 一致？ True
+
+=== 6) 验收 4：真实导入后 metric_value 行的生效参数快照 ===
+  compute_runs=1 dedupe_hits=1 metrics_written=2
+  node_id=4 code=v_RMS value=11.091438 params_hash=192dbf284ba1
+    effective_params_json = {"band_high":15200.0,"band_low":10.0,"detrend":true,"step_s":2.0,"window_fn":"hanning","window_s":2.0}
+    解析 band_high = 15200.0
+  node_id=7 code=v_RMS value=11.091438 params_hash=192dbf284ba1
+    effective_params_json = {"band_high":15200.0,"band_low":10.0,"detrend":true,"step_s":2.0,"window_fn":"hanning","window_s":2.0}
+    解析 band_high = 15200.0
+  两行指纹相同？ True                                【验收 4 通过】
+  （同一通道两个节点分别填 band_high=16000 / 30000、fs=32000：夹紧后同口径 → 只真算
+    一次、写两行，快照里读回 15200.0）
+
+四、回归与规范检查（真实输出）
+------------------------------
+  $ .venv/bin/python -m pytest
+  ........................................................................ [ 11%]
+  ........................................................................ [ 23%]
+  ........................................................................ [ 35%]
+  ........................................................................ [ 47%]
+  ........................................................................ [ 58%]
+  ........................................................................ [ 70%]
+  ........................................................................ [ 82%]
+  ........................................................................ [ 94%]
+  ....................................                                     [100%]
+  612 passed in 204.27s (0:03:24)
+  EXIT=0
+  （基线 597 passed；本任务新增 15 条：tests/test_params_hash_effective.py 10 条 +
+    tests/test_features_pipeline_effective_params.py 5 条）
+
+  $ .venv/bin/ruff check src app tests
+  All checks passed!            CHECK_EXIT=0
+  $ .venv/bin/ruff format --check src app tests
+  138 files already formatted   FORMAT_EXIT=0
+
+五、改动的既有断言（本任务口径变化导致，逐条说明）
+--------------------------------------------------
+1. tests/test_features_pipeline_node_params.py:159
+   `{r.params_hash for r in rows} == {params_hash(default_params("v_RMS"))}`
+   → `params_hash(default_params("v_RMS"), code="v_RMS", sample_rate=FS)`
+   （指纹现在含指标码与 fs，断言内容不变：两个节点同参数 → 同一指纹）
+2. tests/test_features_pipeline_node_params.py:288
+   `all(job.params_hash == params_hash(job.params))`
+   → `all(job.params_hash_for(FS) == params_hash(job.params, code=job.code, sample_rate=FS))`
+   （MetricJob 不再在建任务时定死指纹）
+3. tests/test_store_metric_trace.py:194-195
+   导入管线写入的指纹断言补 `code=` 与 `sample_rate=FS`。
+   其余测试断言未改。
+
+六、取舍说明（brief 允许的范围）
+--------------------------------
+- `effective_params_json` 这一项**做了**（brief 建议项），改动面确认可控：
+  1 列 + 1 处幂等迁移 + 1 个 dataclass 字段 + 1 行落库 + 1 行管线写值。
+- 旧行（历史值）`params_hash` 与 `effective_params_json` 不回填：老指纹是旧口径
+  （不含 code/fs、未夹紧），无法反推当时 fs，按 brief「历史行为空」处理；
+  需要重算的旧值仍按既有 stale 流程走，不伪造快照。
+- 未做项：有效性业务判据（E1）、阈值推送告警（E3）、设备使用信息字段——brief 第 5 条明确不做。
+- 未做项（顺带发现，不属本任务）：`metric_value` 历史行的 `params_hash` 与新口径不可比，
+  趋势/审计页若将来要「按指纹比对参数是否变过」，需要给新列/新指纹留一版过渡说明（记在这里备查）。

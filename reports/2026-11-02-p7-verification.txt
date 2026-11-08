@@ -1,0 +1,116 @@
+P7 回归补齐（T9）验收证据
+=========================
+日期：2026-11-02
+任务：kanban t_13ddd1ee（P7 regression coverage / T9）
+项目：/home/administrator/workspace/projects/Lion-Monitor
+提交：291cc6a  test(p7): 回归测试文件头补 G5/G6 缺陷编号，条目可逐条追溯（P7·T9）
+      本文档随同批 docs 提交落地（提交号见 `git log -- reports/2026-11-02-p7-verification.txt`）
+工作区：git status --porcelain 仅剩开卡前既存的 13 个 docs/kanban/bodies/*_brief.md 未跟踪文件
+       （沿用前序任务口径，不代其他卡提交）
+
+一、本卡做了什么
+---------------
+1. 逐行核对任务书（docs/kanban/bodies/p7_brief.md）16 行回归矩阵与本轮全部修复提交：
+   16/16 行都已有真实用例（在修复提交里随实现一起落地），本卡不重复造用例。
+2. 补缺口：G5（建任务不再播种旧 threshold 表）与 G6（节点级回收站）两处用例只在
+   docstring 里写缺陷号，文件头没有编号，无法按「文件头注明对应缺陷编号」逐条追溯。
+   已在三个文件的文件头补编号（提交 291cc6a）：
+   - tests/test_store_tasks.py          → 文件头补 G5 说明
+   - tests/test_store_recycle_nodes.py  → 文件头 P6-3 补为「P6-3（G6）」
+   - tests/test_page_recycle_bin.py     → 文件头 P6-3 补为「P6-3 / G6」
+3. 抽查 2 行做反证（改坏被测逻辑 → 断言变红 → 改回 → 恢复绿），证明确实不是空转断言。
+
+二、覆盖矩阵（任务书逐行 → 真实用例名）
+--------------------------------------
+命令（定向全跑，真实输出）：
+  .venv/bin/python -m pytest -v <下列 23 个文件>
+  ============================ 167 passed in 10.35s ============================
+
+| 任务书行 | 缺陷 | 对应用例（文件::测试名） | 引入提交 |
+|---|---|---|---|
+| 4 通道树 + 3 文件 → missing_channels == ["CH4"] | G2 | tests/test_features_pipeline_missing_channels.py::test_tree_four_channels_batch_three_files_reports_ch4（同文件另有 3 条：四文件空列表、三通道树不臆造、按树顺序）<br>页面级：tests/test_page_ingest_missing_channels.py::test_batch_missing_channel_shows_chinese_hint | 8432825 |
+| 未软删同键插入两次 → IntegrityError；软删后可插 | G3 | tests/test_store_partial_unique_indexes.py::test_metric_assign_duplicate_active_key_raises<br>::test_metric_assign_reinsert_after_soft_delete<br>::test_metric_limit_duplicate_active_key_raises<br>::test_metric_limit_reinsert_after_soft_delete<br>::test_init_db_migrates_legacy_unique_constraint（老库迁移 + 迁移后约束真的生效） | 4bd935e |
+| 阈值页对象列表 == 监测对象页 | G4 | tests/test_page_thresholds_registry.py::test_thresholds_object_dropdown_equals_registry<br>::test_thresholds_and_registry_page_lists_match（AppTest 实跑两页逐项比对） | aa5ccc1 |
+| 建任务后旧 threshold 表 0 行新增 | G5 | tests/test_store_tasks.py::test_create_task_does_not_seed_legacy_thresholds（建两个任务，两任务 threshold 均 0 行） | 1103ea5 |
+| 删节点 → deletion_log 有子树快照 → 恢复后子树与授权回来 | G6 | tests/test_store_recycle_nodes.py::test_soft_delete_node_writes_subtree_snapshot<br>::test_restore_node_brings_back_subtree_and_assigns<br>页面级：tests/test_page_recycle_bin.py::test_recycle_page_lists_node_path_with_remaining_days | d5b4d77 / 17b6aa1 |
+| 坏头文件单文件降级，其余文件正常入库 | G8 | tests/test_features_pipeline_bad_header_batch.py::test_one_bad_header_time_only_degrades_that_file<br>::test_all_bad_header_time_discards_batch<br>页面级：tests/test_page_ingest_bad_header.py::test_all_bad_header_batch_reports_one_chinese_error_without_traceback | 743c0cb |
+| 坏文件导入后日志文件有 warning 行 | G15 | tests/test_logging_setup.py::test_import_warnings_and_summary_land_in_log_file（断言日志文件里有「跳过损坏文件」+ 文件名 + 导入开始/结束） | 5eb5b91 |
+| 模板 effective_params 跨任务导入后生效值一致 | S3 | tests/test_tree_template_v2_effective_params.py::test_override_default_moves_effective_value_across_tasks（跨任务导入后生效值逐项一致；同文件另有 12 条：预览漂移、三策略、锁定标记等） | bcaab4b |
+| 16000/30000 夹紧后同指纹；fs 不同不同指纹 | S6 | tests/test_params_hash_effective.py::test_hash_same_when_raw_band_clamps_to_same_value<br>::test_hash_changes_with_sample_rate | 1457da6 |
+| 备份文件可读且行数一致；迁移前自动备份 | T2 | tests/test_store_backup.py::test_backup_creates_file_with_same_rows（备份文件独立 sqlite3 打开 + integrity_check=ok + 行数一致）<br>tests/test_store_migration_backup.py::test_init_db_backs_up_before_migration | a011dcd / a5fc15a |
+| 阈值/参数变更写 change_log，同值不写 | T3 | tests/test_store_audit.py::test_threshold_change_records_only_changed_fields<br>::test_threshold_same_values_records_nothing<br>::test_params_save_with_same_value_records_nothing | ea82726 |
+| journal_mode == wal | T10 | tests/test_store_db_wal.py::test_engine_uses_wal（另有 busy_timeout 30 s / BEGIN IMMEDIATE / 重连后仍 WAL） | 22aab4a |
+| 空库启动任务数 0 | Q5 | tests/test_store_ctx_no_autoseed.py::test_first_open_of_empty_db_creates_no_task<br>页面级：tests/test_page_health_tree_no_task.py::test_page_offers_example_tree_button_when_no_task | 278f5b0 |
+| band_low=0.1 被拒/被抬高 | Q9 | tests/test_params_band_low_floor.py::test_validate_rejects_one_tenth_hz_with_chinese_reason<br>::test_clamp_raises_low_to_ten_periods（另有 17 条：硬下限、按窗长抬高、生效带通永不低于硬下限）<br>数值后果：tests/test_features_metrics_band_low.py::test_v_rms_not_absurd_with_low_band_params | eb95f5a |
+| 8 天前记录被清理，6 天前保留 | 回收站保留期 | tests/test_store_recycle_nodes.py::test_startup_purge_removes_expired_records_only（8 天前 deletion_log/节点/授权全清；6 天前的仍在回收站） | d5b4d77 |
+| 20s/2s/2s → 10 点 | 切窗 S4W-1/S4W-2 | tests/test_features_metrics_window.py::test_compute_metric_series_20s_2s_gives_ten_v_rms_points_at_window_centers<br>tests/test_features_metrics_window_time.py::test_20s_2s_window_gives_ten_a_peak_and_a_rms_points_at_window_centers<br>流水线级：tests/test_features_pipeline_window_time.py::test_import_20s_writes_ten_points_per_time_domain_metric | c8ec959 / 0e26c6a / bbf2ed2 |
+
+补充说明（T9 原始清单，非本表行）：B1/B2/B3/G1 的回归用例在本轮各自修复卡已落地，本卡核对存在且通过：
+- B1 编号撞库/并发：tests/test_store_dataset_code_b1.py（4 条，含四并发导入）
+- B2 批次事务回滚：tests/test_features_pipeline_batch_transaction.py（6 条）
+- B3 NaN/重复通道/坏头兜底：tests/test_features_pipeline_input_guard.py（8 条）
+- G1 相对/绝对路径同一批次：tests/test_store_dataset_path_idempotent.py（3 条）
+
+三、反证（改坏逻辑 → RED → 改回 → GREEN）
+-----------------------------------------
+反证 A：G2 missing_channels（改坏 src/lion_monitor/features/pipeline.py:497
+        ``missing = [code for code in assembled if code not in present]`` → ``missing = []``）
+  RED：
+    tests/test_features_pipeline_missing_channels.py:123: AssertionError: assert [] == ['CH1', 'CH3', 'CH4']
+    FAILED tests/test_features_pipeline_missing_channels.py::test_tree_four_channels_batch_three_files_reports_ch4
+    FAILED tests/test_features_pipeline_missing_channels.py::test_missing_channels_keeps_tree_order
+    2 failed, 2 passed in 1.76s
+  改回（git checkout -- src/lion_monitor/features/pipeline.py）后 GREEN：
+    4 passed in 1.87s
+
+反证 B：G6 回收站子树快照（改坏 src/lion_monitor/store/tree.py::soft_delete_node 的
+        payload 入参 ``_recycle_payload(session, models, assigns, limits, nested=True)`` → ``{}``）
+  RED：
+    tests/test_store_recycle_nodes.py:230: KeyError: 'node'
+    FAILED tests/test_store_recycle_nodes.py::test_soft_delete_node_writes_subtree_snapshot
+    FAILED tests/test_store_recycle_nodes.py::test_restore_node_brings_back_subtree_and_assigns
+    FAILED tests/test_store_recycle_nodes.py::test_restore_node_with_missing_parent_falls_back_to_task_root
+    FAILED tests/test_store_recycle_nodes.py::test_startup_purge_removes_expired_records_only
+    FAILED tests/test_store_recycle_nodes.py::test_purge_keeps_alive_children_of_expired_parent
+    5 failed, 4 passed in 0.92s
+  改回（git checkout -- src/lion_monitor/store/tree.py）后 GREEN（含页面级）：
+    .venv/bin/python -m pytest tests/test_store_recycle_nodes.py tests/test_page_recycle_bin.py
+    10 passed in 1.91s
+
+结论：两行用例都会因被测逻辑被改坏而立即变红（不是空转断言），且改回后恢复绿；
+      反证过程未留在工作区（两次 git checkout 已复原，git status 干净）。
+
+四、全量与静态检查（真实输出）
+-----------------------------
+  .venv/bin/python -m pytest
+  --------------------------- 743 passed in 53.31s ---------------------------   （要求 ≥600）
+  收尾复跑（补编号与报告落盘后，工作区已提交状态）：
+  743 passed in 49.52s
+
+  .venv/bin/ruff check src app tests
+  All checks passed!
+
+  .venv/bin/ruff format --check src app tests
+  162 files already formatted
+
+五、验收项逐条结论
+-----------------
+1. 上表逐行有对应测试名：通过（见第二节真实用例名；定向 23 文件 167 passed 的实跑输出在第二节开头）。
+2. 全量 pytest 全绿且 ≥600：通过（743 passed in 53.31s）。
+3. 抽查 2 条做反证：通过（A=G2 missing_channels 2 failed→4 passed；B=G6 子树快照 5 failed→10 passed）。
+4. ruff check + ruff format --check：通过（All checks passed! / 162 files already formatted）。
+
+六、改动文件
+-----------
+- tests/test_store_tasks.py（文件头补 G5）
+- tests/test_store_recycle_nodes.py（文件头补 G6）
+- tests/test_page_recycle_bin.py（文件头补 G6）
+- reports/2026-11-02-p7-verification.txt（本文件）
+
+七、未做项（明确说明）
+---------------------
+- 无新增实现代码：本轮 16 行缺陷的修复都已在前序卡落地，回归用例也在修复提交里随实现落地，
+  本卡只做覆盖核对、追溯标注（G5/G6 文件头）与反证，故没有「先写失败测试 → 实现」的新实现。
+- 未新增重复用例：矩阵每行已至少 1 条真实用例且经反证/定向实跑验证，按「只做任务要求范围」
+  不重复造用例。
+- 未覆盖（任务书明令不实现）：有效性业务判据（E1）、阈值推送告警（E3）、设备使用信息字段。

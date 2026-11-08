@@ -1,0 +1,172 @@
+"""总体复查·只读探测（危险操作：模板整树替换 / 删节点 / 删数据集 的撤销能力）。
+
+只读：不改 src/、app/；临时库落在 ~/workspace/temp/<日期>/review-danger/。
+运行：
+    cd ~/workspace/projects/Lion-Monitor && .venv/bin/python scripts/review_probe_danger.py
+证据输出：reports/2026-10-31-review-danger.txt
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from lion_monitor.store import (  # noqa: E402
+    channel_reg,
+    datasets,
+    metric_assign,
+    metric_def,
+    object_registry,
+    recycle,
+    tasks,
+    tree,
+)
+from lion_monitor.store.db import init_db, make_engine, make_session_factory  # noqa: E402
+
+STAMP = datetime.now().strftime("%Y-%m-%d")
+WORK = Path.home() / "workspace" / "temp" / STAMP / "review-danger"
+OUT = ROOT / "reports" / "2026-10-31-review-danger.txt"
+
+lines: list[str] = []
+
+
+def say(text: str = "") -> None:
+    print(text)
+    lines.append(text)
+
+
+def head(title: str) -> None:
+    say("")
+    say("=" * 92)
+    say(title)
+    say("=" * 92)
+
+
+def fresh(name: str):
+    WORK.mkdir(parents=True, exist_ok=True)
+    path = WORK / name
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    return path, engine, make_session_factory(engine)()
+
+
+def build_tree(session, name: str):
+    task = tasks.create_task(session, name=name, operator="review")
+    obj = object_registry.create_object(session, task.id, "轴承", "轴承", part="X")
+    metric_def.seed_defaults(session, task.id)
+    root = tree.root_node(session, task.id)
+    dev = tree.create_node(session, task.id, "device", "卷绕产线", parent_id=root.id, attrs={})
+    comp = tree.create_node(
+        session, task.id, "component", "轴承", parent_id=dev.id, attrs={}, ref_id=obj.id
+    )
+    ch_row = channel_reg.create_channel(session, task.id, obj.id, "CH1")
+    ch = tree.create_node(
+        session, task.id, "channel", "CH1", parent_id=comp.id, attrs={}, ref_id=ch_row.id
+    )
+    for metric in ("a_Peak", "a_RMS", "v_RMS"):
+        metric_row = metric_def.find_metric(session, task.id, metric)
+        tree.create_node(
+            session,
+            task.id,
+            "metric",
+            metric,
+            parent_id=ch.id,
+            attrs={"code": metric},
+            ref_id=metric_row.id if metric_row else None,
+        )
+        metric_assign.assign_metric(session, task.id, ch.id, metric)
+    return task, ch
+
+
+def counts(engine) -> dict[str, int]:
+    with engine.connect() as conn:
+        return {
+            "alive_nodes": conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM task_node WHERE deleted_at IS NULL"
+            ).scalar(),
+            "dead_nodes": conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM task_node WHERE deleted_at IS NOT NULL"
+            ).scalar(),
+            "alive_assign": conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM metric_assign WHERE deleted_at IS NULL"
+            ).scalar(),
+            "alive_limits": conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM metric_limit WHERE deleted_at IS NULL"
+            ).scalar(),
+            "deletion_log": conn.exec_driver_sql("SELECT COUNT(*) FROM deletion_log").scalar(),
+        }
+
+
+def probe_template_replace() -> None:
+    head("[D1] 模板 v2「整树替换」：旧树是否留痕 / 能否恢复")
+    path, engine, sess = fresh("danger-template.db")
+    task, ch = build_tree(sess, "模板替换")
+    say(f"　替换前：{counts(engine)}")
+
+    payload = tree.export_template(sess, task.id)
+    payload["root"]["children"][0]["name"] = "改过名的设备"
+    report = tree.import_template(sess, task.id, payload)
+    say(f"　导入改过的模板：新建节点 {report.node_total} · 绑定指标 {report.metrics_bound}")
+    say(f"　替换后：{counts(engine)}")
+    recycle_rows = recycle.list_recycle_items(sess)
+    say(f"　回收站可见条目：{len(recycle_rows)} → {[r.entity_name for r in recycle_rows]}")
+    say(
+        "　→ tree.soft_delete_node（tree.py:375-383）只写 deleted_at，不写 deletion_log；"
+        "回收站只认 deletion_log(mode=soft) 且实体类型在 {dataset, test_task} 内的行"
+        "（recycle.py:32-35）"
+    )
+    say(
+        "　→ 结论：模板整树替换 / 删节点 / 删指标授权 都是「不可撤销」的破坏性操作，"
+        "页面上只有一次 checkbox 确认"
+    )
+    say(
+        f"　　（被替换掉的 metric_assign 行仍指向已软删节点，成为孤儿：alive_assign={counts(engine)['alive_assign']}）"
+    )
+    sess.close()
+
+
+def probe_dataset_delete() -> None:
+    head("[D2] 对照：删数据集是有留痕、可恢复的")
+    path, engine, sess = fresh("danger-dataset.db")
+    task, ch = build_tree(sess, "删数据集")
+    row = datasets.create_dataset(sess, task.id, "b1", "/tmp/x", "2026-10-31 10:00:00", "有效")
+    datasets.add_file(sess, row.id, "/tmp/x/CH1.dat", "CH1", 32000.0, 1000)
+    datasets.delete_dataset(sess, row.id)
+    rows = recycle.list_recycle_items(sess)
+    say(f"　删除后：{counts(engine)}；回收站 {len(rows)} 条 → {[r.entity_name for r in rows]}")
+    result = recycle.restore_item(sess, rows[0].log_id)
+    say(f"　恢复：ok={result.ok} {result.message}")
+    say(f"　恢复后：{counts(engine)}")
+    sess.close()
+
+
+def probe_node_delete() -> None:
+    head("[D3] 删健康树节点：级联软删，无留痕")
+    path, engine, sess = fresh("danger-node.db")
+    task, ch = build_tree(sess, "删节点")
+    before = counts(engine)
+    removed = tree.soft_delete_node(sess, ch.id)
+    after = counts(engine)
+    say(f"　删通道节点：级联 {removed}；{before} → {after}")
+    say(f"　回收站 {len(recycle.list_recycle_items(sess))} 条（没有可恢复入口）")
+    sess.close()
+
+
+def main() -> None:
+    head(f"Lion-Monitor 总体复查 · 危险操作探测　{datetime.now():%Y-%m-%d %H:%M:%S}")
+    probe_template_replace()
+    probe_dataset_delete()
+    probe_node_delete()
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n已写：{OUT}")
+
+
+if __name__ == "__main__":
+    main()

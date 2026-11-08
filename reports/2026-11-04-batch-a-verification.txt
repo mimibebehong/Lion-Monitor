@@ -1,0 +1,178 @@
+Lion-Monitor 批次 A 修复验收（问题 1 阻塞 / 问题 2 严重）
+================================================================================
+项目：/home/administrator/workspace/projects/Lion-Monitor
+依据：docs/reviews/2026-11-03-总体复查-v2.md 问题 1（阻塞）、问题 2（严重）
+执行：coding-copilot（kanban t_3dec68f1）  时间：2026-11-04 08:1x → 08:4x（CST）
+范围：只做批次 A；未改 data/lion.db；未跑任何生产写操作。
+
+--------------------------------------------------------------------------------
+一、问题 1：老库升级必然失败且每次启动重试 —— 已修复
+--------------------------------------------------------------------------------
+根因（复核确认）
+  1) store/db.py::_run_migrations 里 _relax_sensor_node_nullable 排在
+     _add_sensor_channel_code 之前；
+  2) _relax_sensor_node_nullable 用当前 ORM 建新表，models.Sensor.channel_code 是
+     NOT NULL 且只有 Python 侧 default（无 server_default）；
+  3) 搬数据的 INSERT 列清单不含 channel_code → NOT NULL constraint failed；
+  4) 「上次中途失败」恢复分支同样缺列（且 INSERT OR IGNORE 会静默丢行）；
+  5) 只改名、新表还没建的更早中断态，旧代码直接 DROP sensor_old → 数据丢失。
+
+改动
+  src/lion_monitor/store/models.py
+      Sensor.channel_code 加 server_default=""（建表 DDL 变成 DEFAULT '' NOT NULL）
+  src/lion_monitor/store/db.py
+      - 新增 _SENSOR_COLUMNS / _sensor_copy_sql()：按列清单搬数据，老库没有
+        channel_code 时补 ''（有该列时 COALESCE(channel_code,'')）
+      - _run_migrations：_add_sensor_channel_code() 提到 _relax_sensor_node_nullable() 之前
+      - _relax_sensor_node_nullable 的恢复分支：
+          · sensor 存在 → 用同一列清单 INSERT OR IGNORE，不再静默丢行
+          · sensor 不存在（只改名）→ ALTER TABLE sensor_old RENAME TO sensor 先还原
+      - 重建分支的 INSERT 改用同一列清单
+
+实测（脚本 scripts/fix_a_probe_legacy.py，临时库在 ~/workspace/temp/2026-11-04/batch-a/）
+
+  修复前（git stash 掉 db.py/models.py 后跑同一探针，原始输出
+  ~/workspace/temp/2026-11-04/batch-a/probe-legacy-BEFORE-FIX.txt）：
+    A 老库（sensor.node_id NOT NULL、无 channel_code、1 行数据）
+      attempt 1: FAILED  IntegrityError: (sqlite3.IntegrityError)
+                 NOT NULL constraint failed: sensor.channel_code
+                 [SQL: INSERT INTO sensor (id, task_id, node_id, model, ...)
+                  SELECT id, task_id, node_id, model, ... FROM sensor_old]
+                 counts after failure: {"sensor": 0, "sensor_old": 1}
+                 （正式表 0 行、数据留在临时表 → 应用打不开、每次启动重试）
+    B 中途失败中间态（sensor 空 0 行 + sensor_old 2 行）
+      旧代码：init_db() 不报错，但结果 {"sensor": 0, "sensor_old": -1} → 2 行被静默丢弃
+    C 只改名态（sensor 表不存在、sensor_old 2 行）
+      旧代码：init_db() 不报错，但结果 {"sensor": 0, "sensor_old": -1} → 2 行被 DROP 掉
+
+  修复后（~/workspace/temp/2026-11-04/batch-a/probe-legacy.txt）：
+    A_before   : sensor 1 行，node_id notnull=1，channel_code 列不存在
+    A_pending_migrations: ["index:ix_sensor_deleted_at","index:ix_sensor_node_id",
+                           "index:ix_sensor_task_id","table:sensor"]
+    init_db() #1 : ok=true  counts {"sensor":1,"sensor_old":-1}  schema 对象 49 个
+    init_db() #2 : ok=true  counts {"sensor":1,"sensor_old":-1}  schema 对象 49 个
+    init_db() #3 : ok=true  counts {"sensor":1,"sensor_old":-1}  schema 对象 49 个
+    A_after    : node_id notnull=0（已可空），channel_code notnull=1、值 ''
+                 行内容保留：{"id":1,"node_id":101,"model":"PCB-1","channel_code":""}
+    A_schema_stable_after_3x: true（3 次后结构指纹完全一致）
+    B_half_state {"sensor":0,"sensor_old":2} → B_self_heal "OK" →
+      B_after {"sensor":2,"sensor_old":-1}，两行 node_id/model 原样（PCB-1/PCB-2）、channel_code=''
+    C_after_rename_only "OK" → C_counts {"sensor":2,"sensor_old":-1}（不再丢数据）
+
+  新建库 DDL 复核（当前 ORM 建表）：
+      channel_code VARCHAR(32) DEFAULT '' NOT NULL
+      node_id INTEGER                        ← 可空
+
+--------------------------------------------------------------------------------
+二、问题 2：并发导入第二者 0.05 s 报 database is locked —— 已修复
+--------------------------------------------------------------------------------
+根因（复核确认）
+  session.begin_nested() 先发 SAVEPOINT → SQLite 开 DEFERRED 事务；批次开头先读
+  （取编号 / 查已有批次），随后 INSERT 要把读事务升级成写事务，另一个写者持锁时得到
+  SQLITE_BUSY_SNAPSHOT —— 该错误不调用 busy handler，busy_timeout(30 s) 形同虚设。
+
+改动（三处同型代码 + 数据集服务写路径，全部先取写锁）
+  src/lion_monitor/store/db.py          新增 begin_immediate(session)
+        · 已有事务（in_transaction）→ 不做任何事（避免 cannot start a transaction
+          within a transaction）
+        · 否则 conn.exec_driver_sql("BEGIN IMMEDIATE")，让第二个写者在入口按
+          busy_timeout 排队
+  src/lion_monitor/features/pipeline.py import_batch()：begin_nested() 之前调用
+  src/lion_monitor/store/component_freq.py
+        import_csv()（真导入）与 preview_import()（预览，SAVEPOINT 之前）
+  src/lion_monitor/store/datasets.py
+        create_dataset / update_dataset / set_file_status / set_measured_rpm /
+        delete_dataset（都是「先读后写」的服务写入口）
+
+实测（脚本 scripts/fix_a_probe_concurrent.py，真实 SQLite 文件 + threading，不 mock 锁）
+
+  修复前（~/workspace/temp/2026-11-04/batch-a/probe-concurrent-BEFORE-FIX.txt）：
+    pipeline (2 线程 × 5 轮):
+      imports=10  ok=5  locked_errors=5  max_elapsed_s=0.0353  dataset_count=4
+      失败样例: OperationalError: (sqlite3.OperationalError) database is locked
+               [SQL: INSERT INTO dataset (...)]
+    queue (另一连接持写锁 1 s，之后导入):
+      ok=false, waited_s=0.004,
+      error=OperationalError: database is locked（0.004 s 就失败，完全没排队）
+
+  修复后（~/workspace/temp/2026-11-04/batch-a/probe-concurrent.txt）：
+    pipeline (2 线程 × 5 轮 = 10 次导入):
+      imports=10  ok=10  locked_errors=0  max_elapsed_s=0.0721  dataset_count=7
+      第1轮 不同数据集 wall 0.068 s：batch_1A 0.0670 s 有效 / batch_2B 0.0301 s 有效
+      第2轮 不同数据集 wall 0.051 s：batch_3A 0.0505 s 有效 / batch_4B 0.0264 s 有效
+      第3轮 不同数据集 wall 0.065 s：batch_5A 0.0646 s 有效 / batch_6B 0.0210 s 有效
+      第4轮 同一数据集：batch_same-1 0.0578 s 有效 / batch_same-2 0.0296 s 有效
+      第5轮 同一数据集：batch_same-1 0.0424 s 有效 / batch_same-2 0.0131 s 有效
+      dataset_count=7（3 轮 × 2 个新目录 + 同一目录重复导入 4 次仍只有 1 个 → 幂等）
+    queue: ok=true status=有效 waited_s=1.051
+      → 另一个写者持锁 1 s 时，本导入**排队等 1.051 s 后成功**（不再是 0.004 s 报错）
+    component_freq CSV 并发: 2 次导入 both ok（0.024 s / 0.010 s），locked_errors=0，
+      component_freq 行数 16（2 部件 × 8 频率项），channel_reg 未重复
+
+--------------------------------------------------------------------------------
+三、新增回归测试（8 条，全部真跑）
+--------------------------------------------------------------------------------
+tests/test_db_legacy_upgrade.py（4 条）
+  · test_legacy_upgrade_keeps_rows_and_relaxes_node_id
+  · test_legacy_upgrade_is_idempotent_three_times
+  · test_half_failed_upgrade_self_heals
+  · test_interrupted_before_table_recreate_restores_data
+tests/test_import_concurrent.py（4 条，真实 SQLite + threading，无 mock）
+  · test_concurrent_import_batch_all_succeed（2 线程 × 5 轮，10 次全成功、排队 ≤2 s）
+  · test_concurrent_component_freq_import_all_succeed
+  · test_begin_immediate_skips_existing_transaction
+  · test_concurrent_write_does_not_leak_locks
+
+反证（把修复 stash 掉后跑同一批测试 → 全红）
+  老库用例 4 条全红：
+    test_legacy_upgrade_keeps_rows_and_relaxes_node_id  assert 0 == 3
+    test_legacy_upgrade_is_idempotent_three_times       同上（行数 0）
+    test_half_failed_upgrade_self_heals                 同上
+    test_interrupted_before_table_recreate_restores_data assert 0 == 3
+  并发用例 1 条红（另外 3 条是辅助断言）：
+    test_concurrent_import_batch_all_succeed
+    并发导入失败：[… 'error': "OperationalError: (sqlite3.OperationalError)
+    database is locked [SQL: INSERT INTO dataset (...)]", 'elapsed': 0.0088 …]
+
+--------------------------------------------------------------------------------
+四、全量测试与静态检查
+--------------------------------------------------------------------------------
+.venv/bin/python -m pytest
+  → 1143 passed in 124.82s (0:02:04)    （基线 1135 + 本次新增 8，未改松任何既有用例）
+  原始输出：~/workspace/temp/2026-11-04/batch-a/pytest-full.txt
+
+.venv/bin/ruff check src app tests
+  → All checks passed!
+.venv/bin/ruff format --check（改动文件）
+  → 8 files already formatted（提交前格式化过一次）
+
+--------------------------------------------------------------------------------
+五、生产库未被写（铁律 #2）
+--------------------------------------------------------------------------------
+  开工前 sha256 = 577b2c6ddd16dda93d0c663775d8d8552b58bafa5a0b553bf64f800c4709b4c3
+  收尾后 sha256 = 577b2c6ddd16dda93d0c663775d8d8552b58bafa5a0b553bf64f800c4709b4c3  一致
+  ls -l data/lion.db → 376832 B, Nov 3 21:14（mtime 未变）
+  所有探针/测试都用临时库（tmp_path / ~/workspace/temp/2026-11-04/batch-a/）。
+
+--------------------------------------------------------------------------------
+六、改动文件清单
+--------------------------------------------------------------------------------
+src/lion_monitor/store/db.py            迁移顺序/搬数据列 + begin_immediate()
+src/lion_monitor/store/models.py        Sensor.channel_code server_default=""
+src/lion_monitor/features/pipeline.py   import_batch() 先取写锁
+src/lion_monitor/store/component_freq.py import_csv()/preview_import() 先取写锁
+src/lion_monitor/store/datasets.py      5 个写入口先取写锁
+tests/test_db_legacy_upgrade.py         新增（4 条）
+tests/test_import_concurrent.py         新增（4 条）
+scripts/fix_a_probe_legacy.py           新增（老库探针）
+scripts/fix_a_probe_concurrent.py       新增（并发探针，含排队验证）
+
+--------------------------------------------------------------------------------
+七、边界与未做
+--------------------------------------------------------------------------------
+· 未动批次 B（hanning 窗 / stale 判级）、C（性能）、D（运维）的内容。
+· 未改 data/lion.db，未跑生产写操作，未调用 hermes send。
+· 已知未覆盖（复查 v2 问题 7：老库升级后表结构比新建库宽松，缺 NOT NULL 与部分索引）
+  属于批次 D 范围，本卡未处理。
+· component_freq 并发在修复前的复现不稳定（CSV 解析耗时会把两次写错开，本次复现 0 次
+  锁错），因此该路径的回归价值主要靠「同一把写锁入口」+ 用例保证，不作为红证据引用。

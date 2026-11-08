@@ -1,0 +1,139 @@
+S4W-1 验收证据：window_s / step_s 切窗（频域指标）+ window_fn 生效
+================================================================
+日期：2026-11-02　｜　工程：/home/administrator/workspace/projects/Lion-Monitor
+提交：c8ec959（计算层 + 单测）、220b879（管线多点落库 + 亚秒时间戳）、
+      验收脚本与本文（test/证据提交，见 git log）
+
+一、口径（本次定稿，写进 features/metrics.py 模块文档）
+--------------------------------------------------------
+1. 切窗只作用于频域指标：WINDOWED_CODES = ("v_RMS",)；时域指标（a_Peak/a_RMS）本轮
+   仍整段 1 点，S4W-2 再接（复用同一个 window_plan）。
+2. 20 s 数据、window_s=2、step_s=2（不重叠）→ 10 个窗；末段不足一窗丢弃。
+3. 记录本身短于一窗时，整段当 1 个窗（否则 1 s 以内的短记录一个值都没有）；
+   这只影响「整段 < 窗长」，与长记录尾部残窗丢弃不冲突。
+4. computed_at 口径：数据集采集起始时间（dataset.collected_at，即文件头时间）
+   + 窗中心偏移（秒）。20 s/2 s 窗 → 偏移 1,3,…,19 s。
+   整秒沿用 "%Y-%m-%d %H:%M:%S"；窗口步长 < 1 s 时偏移带小数，落库保留微秒
+   （store/metrics._parse_moment 两种格式都认），避免相邻点撞同一秒互相覆盖。
+5. window_fn 在「带通 → 切暂态」之后、频域积分之前作用于窗内数据，并按系数 RMS 归一化
+   （窗本身不改变量级）：hanning/hann、hamming、blackman、kaiser(β=8.6)、rect；未知值报错。
+6. 整段单值接口 compute_metrics 不套窗（保持改造前金标准逐位不变）；只有逐窗路径消费
+   window_fn —— 所以 hanning 下「整段单值」与「首窗值」有差别，rect 时逐位相同。
+
+二、TDD：先 RED（基线 e940cb2 的干净 worktree 上跑新测试）
+--------------------------------------------------------
+命令（在基线提交 e940cb2 的 worktree 里，拷入两个新测试文件后）：
+  .venv/bin/python -m pytest tests/test_features_metrics_window.py
+  .venv/bin/python -m pytest tests/test_features_pipeline_window.py
+
+真实输出（计算层，1 error）：
+  tests/test_features_metrics_window.py:13: in <module>
+      from lion_monitor.features.metrics import compute_metric_series, window_plan
+  E   ImportError: cannot import name 'compute_metric_series' from
+      'lion_monitor.features.metrics'
+  ERROR tests/test_features_metrics_window.py
+  1 error in 1.25s
+
+真实输出（管线层，5 failed）：
+  FAILED tests/test_features_pipeline_window.py::test_import_20s_writes_ten_v_rms_points_with_window_center_timestamps
+  FAILED tests/test_features_pipeline_window.py::test_import_window_5s_step_2s_writes_eight_points
+  FAILED tests/test_features_pipeline_window.py::test_time_domain_metric_still_one_row_at_batch_start
+  FAILED tests/test_features_pipeline_window.py::test_trend_reads_ten_points_and_is_not_decimated
+  FAILED tests/test_features_pipeline_window.py::test_dedupe_reuses_whole_series_for_identical_params
+  5 failed in 1.97s
+（断言失败点：metrics_written 2 == 20 / 1 == 10 等，说明当时每个指标只落 1 点。）
+
+三、GREEN：全量回归 + 静态检查
+------------------------------
+  $ .venv/bin/python -m pytest
+  ........................................................................ [ 98%]
+  ........                                                                 [100%]
+  728 passed in 49.77s
+  （改造前基线 713 passed；本轮新增 15 条：tests/test_features_metrics_window.py 10 条
+    + tests/test_features_pipeline_window.py 5 条）
+
+  $ .venv/bin/ruff check src app tests
+  All checks passed!
+  $ .venv/bin/ruff format --check src app tests
+  160 files already formatted
+
+四、验收项逐条（真实命令输出）
+------------------------------
+验收脚本：.venv/bin/python scripts/verify_s4w1_window.py（8/8 PASS，exit 0）
+
+1) 20 s 数据、window_s=2、step_s=2 → 每个频域指标恰好 10 个值
+   PASS  S4W1-1 20 s / 2 s 窗 → v_RMS 10 点：10 点；窗中心偏移
+         [1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0]；
+         值 [7.3902, 7.3925, 7.3945, 7.3917, 7.3943, 7.392, 7.3958, 7.3991, 7.3956, 7.397]
+   管线落库时间戳（同批 4 通道 20 s，started_at=2026-11-02 09:00:00）：
+         ['2026-11-02 09:00:01', '...:03', '...:05', '...:07', '...:09',
+          '...:11', '...:13', '...:15', '...:17', '...:19']
+   （tests/test_features_pipeline_window.py::test_import_20s_writes_ten_v_rms_points_with_window_center_timestamps
+    另有硬断言：10 行、秒数 35/37/…/53（采集起始 15:28:34））
+
+2) window_s=5、step_s=2 → 8 个值，末段丢弃规则明确
+   PASS  S4W1-2 window_s=5 / step_s=2 → 8 点：8 点；窗区间
+         [(0, 5), (2, 7), (4, 9), (6, 11), (8, 13), (10, 15), (12, 17), (14, 19)]，
+         末段 19~20 s 不足一窗丢弃；窗中心 [2.5, 4.5, 6.5, 8.5, 10.5, 12.5, 14.5, 16.5]
+   即 (20-5)//2+1 = 8；最后整窗覆盖 14~19 s，19~20 s 只有 1 s 残段被丢弃。
+
+3) window_fn=hanning 与 rect → 数值不同、指纹不同
+   PASS  S4W1-3 hanning 与 rect 数值/指纹都不同：第 1 窗 hanning=7.390232 /
+         rect=7.392600；指纹 1301f9fa0331 / 25c6454d6996
+   PASS  S4W1-3b 单值接口不套窗（回归口径不变）：compute_metrics 与 rect 单窗逐位一致
+
+4) 趋势页按节点+指标画出 10 个点
+   （趋势页取数入口 = metric_store.list_values → trend_view.chart_points，同一函数链）
+   PASS  S4W1-4b 趋势取数按节点+指标 10 点且不抽稀：取数 10 点 / 图上 10 点，
+         抽稀=False；时间戳 ['2026-11-02 09:00:01', …, '2026-11-02 09:00:19']
+   PASS  S4W1-4a 单批 4 通道 × 20 s 落库行数：metrics_written=48
+         （每通道 v_RMS 10 行 + a_Peak/a_RMS 各 1 行）；状态 有效
+   PASS  S4W1-4c 时域指标本轮仍整段 1 点：a_Peak 1 行，computed_at=2026-11-02 09:00:00
+   说明：AppTest 画图断言未加（plotly trace 计数在 AppTest 里取不到干净句柄）；
+   页面用的就是 chart_points(list_values(...)) 这条链，故按「取数函数验证」口径（brief 允许）。
+
+5) 全量 pytest 全绿；ruff 通过
+   见第三节：728 passed / All checks passed / 160 files already formatted。
+
+性能（brief 第 5 条口径：至少报告本轮行数）
+   PASS  S4W1-5a 性能：4 通道 × 20 s 单批导入：232 ms（改造前同批 12 行 ≈ 586 ms，
+         复查 §6.1 实测）；本轮 48 行（v_RMS 每通道 10 点 + a_Peak/a_RMS 各 1 点）
+   查询侧沿用 P3 复合索引 (node_id, code, computed_at) / (channel_id, code, computed_at)
+   与趋势页 30 天窗 + 2000 点抽稀，本次未改查询路径。
+
+五、关键代码位置
+----------------
+src/lion_monitor/features/metrics.py
+  48  WINDOWED_CODES = ("v_RMS",)          频域指标清单（时域待 S4W-2）
+ 117  _window_coefficients                  窗函数系数（rect/hann/hamming/blackman/kaiser）
+ 133  _apply_window                         加窗 + RMS 归一化
+ 142  window_plan                           切窗（末段丢弃 / 短记录整段 1 窗 / step>window 兜底）
+ 165  _velocity_rms(..., window_fn=None)    窗内加窗（整段单值路径不传）
+ 225  compute_metric_series                 逐点序列 {code: [(偏移秒, 值), ...]}
+src/lion_monitor/features/pipeline.py
+ 384  _moment_stamp                         collected_at + 窗中心偏移 → 时间戳（亚秒保留微秒）
+ 400  _write_series                         同一时点的所有指标行一起 upsert
+ 557  compute_metric_series(...)            管线改走逐窗序列（去重缓存存整条序列）
+src/lion_monitor/store/metrics.py
+  49  _parse_moment                        整秒/带微秒两种时间格式都认
+  59  _moment_text                         输出按需带微秒
+
+新增测试：tests/test_features_metrics_window.py（10）、tests/test_features_pipeline_window.py（5）
+验收脚本：scripts/verify_s4w1_window.py
+
+六、改动的既有测试与理由
+------------------------
+tests/test_features_pipeline_bad_files.py::test_all_good_batch_result_matches_previous_behaviour
+  原断言：管线落库值 == compute_metrics(整段) 逐位相同。
+  现改为与 compute_metric_series（管线同一入口）逐位相同，并断言序列长度 1。
+  理由：v_RMS 现在走逐窗路径且消费 window_fn（默认 hanning），整段单值接口按金标准不套窗，
+  两者在 hanning 下必然不同（11.036340 vs 11.038568）；时域指标与 rect 口径仍逐位一致。
+  该测试是「行为回归」而非「算法金标准」，算法金标准仍在
+  tests/test_features_metrics_params.py（未改一行，713 基线里逐位回归继续绿）。
+
+七、未做项
+----------
+1. 时域指标（a_Peak/a_RMS）切窗：归 S4W-2（新建子卡 t_4c418c49）。
+2. AppTest 级「图上 10 个点」断言：本轮用取数函数链验证（brief 允许二选一）。
+3. 24 万行端到端 bench_pages.py 未重跑：本轮只改写入侧行数（×10 频域行），
+   查询路径与索引未动；按 brief「跑 bench 或报告行数」口径报告了行数与单批耗时。

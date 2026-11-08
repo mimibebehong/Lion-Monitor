@@ -1,0 +1,268 @@
+删除交互统一（传感器 / 阈值 / 健康树 → 二次点击确认）验收证据
+日期：2026-11-03　　执行：coding-copilot（kanban t_11bf325e）
+项目：/home/administrator/workspace/projects/Lion-Monitor
+
+========================================================================
+0. 一句话结论
+========================================================================
+三处老写法「勾选框 + 禁用按钮」全部移除，改为与 objects.py / datasets.py / tasks.py 一致的
+二次点击确认（第一次变红「确认删除？」，第二次执行）；删除业务逻辑一行未改。
+pytest 1121 → 1135 全绿（新增 14 条本任务测试）；改动文件 ruff check / format 全过。
+
+========================================================================
+1. 改动清单（3 个页面 / 3 个提交）
+========================================================================
+2c84d9e  fix(ui): 传感器页删除改二次点击确认（统一交互）
+b393d0f  fix(ui): 阈值页删除改二次点击确认（统一交互）
+57ebb06  fix(ui): 健康树删节点改二次点击确认（统一交互）
+
+新增测试：
+tests/test_page_sensors_delete_confirm.py      7 条
+tests/test_page_thresholds_delete_confirm.py   3 条
+tests/test_page_health_tree_delete_confirm.py  4 条
+
+各页面改动前后（业务调用、flash 文案、级联/留痕逻辑保持原样）：
+
+------------------------------------------------------------
+1.1 app/pages/sensors.py 单台删除
+------------------------------------------------------------
+改前：
+            col_confirm, col_delete = st.columns([0.4, 0.6], vertical_alignment="bottom")
+            single_confirm = col_confirm.checkbox(
+                "确认删除这台传感器", key="del_sensor_one_" + str(row.id)
+            )
+            if col_delete.button(
+                "删除这台传感器",
+                disabled=not single_confirm,
+                key="del_sensor_one_btn_" + str(row.id),
+                width="stretch",
+            ):
+                with store_ctx.open_session() as session:
+                    sensors.delete_sensor(session, row.id)
+                flash("已删除 1 台传感器", icon="🗑️")
+
+改后：
+            one_arm_key = f"del_sensor_armed_{row.id}"
+            one_armed = bool(st.session_state.get(one_arm_key))
+            if one_armed:
+                st.markdown(danger_button_css(f"del_sensor_one_btn_{row.id}"), unsafe_allow_html=True)
+            if st.button(
+                "确认删除？" if one_armed else "删除这台传感器",
+                key=f"del_sensor_one_btn_{row.id}",
+                width="stretch",
+                help="点两次删除：第一次进入待确认，第二次执行",
+            ):
+                if not one_armed:
+                    st.session_state[one_arm_key] = True
+                    st.rerun()
+                with store_ctx.open_session() as session:
+                    sensors.delete_sensor(session, row.id)
+                st.session_state.pop(one_arm_key, None)
+                flash("已删除 1 台传感器", icon="🗑️")
+
+------------------------------------------------------------
+1.2 app/pages/sensors.py 批量删除
+------------------------------------------------------------
+改前：
+        confirm = st.checkbox(f"确认删除选中的 {len(chosen)} 台传感器", key="del_sensor_confirm")
+        if st.button("删除选中传感器", disabled=not confirm, key="del_sensor_btn"):
+            ...（逐个 sensors.delete_sensor）
+
+改后：
+        batch_ids = tuple(item.id for item in chosen)
+        batch_armed = st.session_state.get("del_sensor_batch_armed") == batch_ids
+        if batch_armed:
+            st.markdown(danger_button_css("del_sensor_btn"), unsafe_allow_html=True)
+        if st.button(
+            f"确认删除 {len(chosen)} 台？" if batch_armed else f"删除选中的 {len(chosen)} 台",
+            key="del_sensor_btn",
+            help="点两次删除：第一次进入待确认，第二次执行",
+        ):
+            if not batch_armed:
+                st.session_state["del_sensor_batch_armed"] = batch_ids
+                st.rerun()
+            ...（逐个 sensors.delete_sensor，与改前完全一致）
+            st.session_state.pop("del_sensor_batch_armed", None)
+            flash(f"已删除 {len(chosen)} 台传感器", icon="🗑️")
+「将删除：…」清单保留不动。
+
+------------------------------------------------------------
+1.3 app/pages/thresholds.py 单行删除
+------------------------------------------------------------
+改前：
+            confirm = st.checkbox("确认删除该阈值", key=f"del_limit_{row.id}")
+            if st.button("删除阈值", disabled=not confirm, key=f"del_limit_btn_{row.id}"):
+                with store_ctx.open_session() as session:
+                    limits.delete_limit(session, row.id)
+                flash("已删除阈值", icon="🗑️")
+
+改后：
+            arm_key = f"del_limit_armed_{row.id}"
+            armed = bool(st.session_state.get(arm_key))
+            if armed:
+                st.markdown(danger_button_css(f"del_limit_btn_{row.id}"), unsafe_allow_html=True)
+            if st.button(
+                "确认删除？" if armed else "删除阈值",
+                key=f"del_limit_btn_{row.id}",
+                help="点两次删除：第一次进入待确认，第二次执行",
+            ):
+                if not armed:
+                    st.session_state[arm_key] = True
+                    st.rerun()
+                with store_ctx.open_session() as session:
+                    limits.delete_limit(session, row.id)
+                st.session_state.pop(arm_key, None)
+                flash("已删除阈值", icon="🗑️")
+
+------------------------------------------------------------
+1.4 app/pages/health_tree.py 删节点及子树
+------------------------------------------------------------
+改前：
+        confirm = st.checkbox("确认删除该节点及其子树", key=f"del_confirm_{node.id}")
+        if st.button("删除节点", disabled=not confirm, key=f"del_{node.id}"):
+            with store_ctx.open_session() as session:
+                removed = tree.soft_delete_node(session, node.id)
+            total = sum(removed.values())
+            flash(f"已删除 {total} 个节点（含子树）", icon="🗑️")
+            st.session_state.pop("ht_selected", None)
+
+改后：
+        arm_key = f"del_node_armed_{node.id}"
+        armed = bool(st.session_state.get(arm_key))
+        if armed:
+            st.markdown(danger_button_css(f"del_{node.id}"), unsafe_allow_html=True)
+        if st.button(
+            "确认删除该节点及子树？" if armed else "删除节点",
+            key=f"del_{node.id}",
+            help="点两次删除：第一次进入待确认，第二次执行",
+        ):
+            if not armed:
+                st.session_state[arm_key] = True
+                st.rerun()
+            with store_ctx.open_session() as session:
+                removed = tree.soft_delete_node(session, node.id)
+            total = sum(removed.values())
+            st.session_state.pop(arm_key, None)
+            flash(f"已删除 {total} 个节点（含子树）", icon="🗑️")
+            st.session_state.pop("ht_selected", None)
+
+另：本页 st.tabs 增加 on_change=_reset_node_delete_arm（args=(node.id,)），切页签即撤销
+该节点的删除待确认态（切「改名与删除」离开再回来按钮不会还是红的）。
+
+========================================================================
+2. armed 复位策略（防误删下一行）
+========================================================================
+- 传感器单台：arm key 带 row.id（del_sensor_armed_<id>）→ 切到另一台自然不 armed
+- 传感器批量：arm 里存当时勾选的 id 元组，与当前勾选集合不等即视为未 armed
+- 阈值：arm key 带阈值行 id（del_limit_armed_<id>）
+- 健康树：arm key 带节点 id（del_node_armed_<id>）；另加 tabs on_change 回调清态
+- 删除成功后一律 st.session_state.pop(arm_key)
+
+========================================================================
+3. TDD：先 RED 再 GREEN（真实输出）
+========================================================================
+3.1 基线（改动前，未加任何新测试）
+$ .venv/bin/python -m pytest
+1121 passed in 109.88s (0:01:49)
+
+3.2 传感器页（RED：先写 tests/test_page_sensors_delete_confirm.py，未改页面）
+$ .venv/bin/python -m pytest tests/test_page_sensors_delete_confirm.py
+... AppTestError: Cannot update a disabled button widget (key='del_sensor_btn')
+6 failed, 1 passed in 2.82s
+
+3.3 传感器页（GREEN：改完 app/pages/sensors.py）
+$ .venv/bin/python -m pytest tests/test_page_sensors_delete_confirm.py tests/test_page_action_grouping.py tests/test_page_sensors_ownership.py
+13 passed in 3.91s
+
+3.4 阈值页（RED：先写 tests/test_page_thresholds_delete_confirm.py）
+$ .venv/bin/python -m pytest tests/test_page_thresholds_delete_confirm.py
+E   AssertionError: ['确认删除该阈值']
+E   AppTestError: Cannot update a disabled button widget (key='del_limit_btn_1')
+3 failed in 1.75s
+
+3.5 阈值页（GREEN：改完 app/pages/thresholds.py）
+$ .venv/bin/python -m pytest tests/test_page_thresholds_delete_confirm.py tests/test_page_thresholds.py tests/test_page_thresholds_audit.py tests/test_page_thresholds_registry.py
+12 passed in 4.50s
+
+3.6 健康树（RED：先写 tests/test_page_health_tree_delete_confirm.py）
+$ .venv/bin/python -m pytest tests/test_page_health_tree_delete_confirm.py
+E   AssertionError: ['确认用内置示例树替换', '包含阈值配置', '呈现 卷绕产线', '确认删除该节点及其子树']
+E   AppTestError: Cannot update a disabled button widget (key='del_3')
+3 failed in 2.08s
+
+3.7 健康树（GREEN：改完 app/pages/health_tree.py）
+$ .venv/bin/python -m pytest tests/test_page_health_tree_delete_confirm.py
+3 passed in 2.14s
+
+3.8 健康树整组回归（含 tabs key 守卫、其余 health_tree 页测试）
+$ .venv/bin/python -m pytest tests/test_page_health_tree_delete_confirm.py tests/test_page_tabs_have_key.py tests/test_page_health_tree_*.py tests/test_tree_ui_helpers.py
+38 passed in 10.93s
+
+3.9 全量（改动后）
+$ .venv/bin/python -m pytest
+1135 passed in 118.47s (0:01:58)
+（1121 + 14 条新增，无一条既有测试放宽或删除）
+
+3.10 健康树切页签复位（源码级守卫）
+$ .venv/bin/python -m pytest tests/test_page_health_tree_delete_confirm.py
+4 passed in 2.22s
+说明：AppTest 不给 tabs on_change 回调补事件——实测（探针脚本）给某个 tab key 赋新值后
+st.session_state["tk"] 从 A 变 B、页面重跑，但登记的 on_change 计数仍是 0。所以「切页签撤掉
+待确认态」这条用源码级守卫（test_tab_switch_wiring_disarms_delete）锁住接线：
+on_change=_reset_node_delete_arm + args=(node.id,) + 回调里 pop del_node_armed_<id>。
+
+========================================================================
+4. 验收逐条
+========================================================================
+1) 传感器页单台删除：点一次不变红不删，点两次才删
+   test_single_delete_needs_two_clicks PASSED
+   （第一次后断言 "确认删除？" 在按钮里、传感器仍 3 台、markdown 含 del_sensor_one_btn_<id>
+     且含危险色 d93a3a；第二次后只剩 2 台）
+2) 传感器页批量删除：第一次后文案「确认删除 2 台？」且未删
+   test_batch_delete_needs_two_clicks PASSED；清单 test_batch_delete_keeps_preview_list PASSED
+3) 阈值页：同上
+   test_delete_limit_needs_two_clicks PASSED（第一次后 2 行未变，第二次后剩 1 行）
+4) 健康树删节点及子树：子树第二次点击后才消失
+   test_delete_node_needs_two_clicks_and_takes_subtree PASSED
+   （第一次后 "隔膜过辊轴承" 与子树 "CH1" 都还在；第二次后两个都消失）
+5) 切换选中行后 armed 复位（三页各有断言）
+   test_single_delete_arming_resets_when_selection_switches PASSED
+   test_batch_delete_arming_resets_when_selection_changes PASSED
+   test_delete_limit_arming_resets_when_row_switches PASSED
+   test_delete_node_arming_resets_when_selection_switches PASSED
+   切页签复位：test_tab_switch_wiring_disarms_delete PASSED（源码级守卫，原因见 3.10）
+6) 三处已无 checkbox 残留：
+$ grep -n "确认删除" app/pages/sensors.py app/pages/thresholds.py app/pages/health_tree.py
+app/pages/sensors.py:225:            # 删除二合一（与监测对象 / 数据集 / 任务页一致）：第一次变红「确认删除？」，
+app/pages/sensors.py:235:                "确认删除？" if one_armed else "删除这台传感器",
+app/pages/sensors.py:267:        # 批量删除同样二合一：第一次变红「确认删除 N 台？」，第二次执行；
+app/pages/sensors.py:274:            f"确认删除 {len(chosen)} 台？" if batch_armed else f"删除选中的 {len(chosen)} 台",
+app/pages/thresholds.py:349:            # 删除二合一（与监测对象 / 传感器 / 任务页一致）：第一次变红「确认删除？」，
+app/pages/thresholds.py:359:                "确认删除？" if armed else "删除阈值",
+app/pages/health_tree.py:876:        # 第一次变红「确认删除该节点及子树？」，第二次才真删；armed 按节点 id 存
+app/pages/health_tree.py:882:            "确认删除该节点及子树？" if armed else "删除节点",
+（全部为按钮文案 / 注释，无 checkbox 标签；原 checkbox key del_sensor_one_<id> / del_sensor_confirm /
+  del_limit_<id> / del_confirm_<id> 均已从代码里消失）
+
+7) 全量测试全绿：1135 passed（见 3.9）
+8) ruff：
+$ .venv/bin/ruff check app src tests
+All checks passed!
+$ .venv/bin/ruff format --check app src tests
+233 files already formatted
+（说明：整仓 `ruff check .` / `ruff format --check .` 还会报 scripts/verify_cf2_freq_ledger.py、
+  scripts/verify_p6_4_audit.py、scripts/verify_template_effective_params.py —— 9 处 E501/F401、
+  3 个文件待格式化。这三个脚本本任务未改（最后一次改动在 a2c506d，属 CF-2/P6-4 遗留），
+  按任务范围「只改上述三处交互、不动其他页面」未处理。）
+
+9) git status 干净：只剩未跟踪的任务书 docs/kanban/bodies/delete_confirm_brief.md
+$ git status --short
+?? docs/kanban/bodies/delete_confirm_brief.md
+
+========================================================================
+5. 未做项 / 说明
+========================================================================
+- 三个 scripts/verify_*.py 的既有 ruff 告警未修（超范围，见 4-8）。
+- 阈值删除入口仍在「已存阈值」折叠区里（位置未变，只换交互）。
+- 删除业务逻辑（sensors.delete_sensor / limits.delete_limit / tree.soft_delete_node、级联、
+  留痕、flash 文案、选中态清理）一行未改。

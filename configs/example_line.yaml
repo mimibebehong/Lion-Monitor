@@ -1,0 +1,46 @@
+# 示例产线配置：锂电芯中段工序（涂布 - 辊压 - 分切）
+id: LINE-A
+name: 电芯中段产线 A
+stations:
+  - id: ST-COATING
+    name: 涂布机
+    sample_rate_hz: 10
+    channels:
+      - name: areal_density
+        unit: mg/cm2
+        warn_low: 19.0
+        warn_high: 21.0
+        crit_low: 18.5
+        crit_high: 21.5
+      - name: oven_temp
+        unit: degC
+        warn_low: 85.0
+        warn_high: 105.0
+        crit_low: 80.0
+        crit_high: 110.0
+
+  - id: ST-CALENDER
+    name: 辊压机
+    sample_rate_hz: 5
+    channels:
+      - name: electrode_thickness
+        unit: um
+        warn_low: 118.0
+        warn_high: 122.0
+        crit_low: 117.0
+        crit_high: 123.0
+      - name: roll_pressure
+        unit: MPa
+        warn_low: 40.0
+        warn_high: 60.0
+        crit_low: 35.0
+        crit_high: 65.0
+
+  - id: ST-SLITTING
+    name: 分切机
+    sample_rate_hz: 2
+    channels:
+      - name: burr_height
+        unit: um
+        warn_high: 12.0
+        crit_high: 20.0

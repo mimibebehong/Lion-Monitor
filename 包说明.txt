@@ -1,0 +1,48 @@
+﻿Lion-Monitor 锂电产线振动监测系统  v0.1.1
+打包时间：2026-11-06
+
+=== 里面是什么 ===
+app/  src/  tests/  tools/  configs/  docs/   源码（git 跟踪的全部内容）
+launcher/LionMonitor.cs                       Windows 启动器源码（C# 5）
+installer/LionMonitor.iss + ChineseSimplified.isl   Inno Setup 6 安装脚本 + 中文语言文件
+installer/lion-icon.png   lion.ico            软件图标（母图 + 七种尺寸 ico）
+docs/manual/用户使用手册.pdf / .md            用户使用手册（安装时装进 {app}\docs）
+tools/build_manual.py                         手册重新生成脚本（md → HTML → PDF）
+build.py  build.bat   start.bat  stop.bat     构建 / 启停脚本（纯 Python + 批处理，不需要 PowerShell）
+Windows开发说明.md                             先看这个
+wheels/                                      60 个 Windows 离线 wheel（离线构建用）
+.build/python-3.11.9-embed-amd64.zip           便携 Python 运行时
+.build/get-pip.py                               pip 引导脚本
+.build/nssm-2.24.zip                            NSSM（开机自启服务用）
+dist/                                          绿色包（便携 Python + 代码 + 演示库 + 三批数据）
+installer/output/LionMonitor-Setup-0.1.1.exe    演示版安装包（约 165 MB，自带三批数据与用户手册；当前分发用这个）
+
+=== 怎么运行 ===
+双击 dist\LionMonitor.exe
+浏览器自动打开 http://localhost:8501
+第二次双击只会再开浏览器，不会重复起服务。
+
+=== 安装包向导 ===
+演示版安装包按「欢迎 → 安装说明 → 选择目标位置 → 附加任务 → 确认 → 完成」走。
+「选择目标位置」页可以直接输入路径，也可以点右侧「浏览...」选目录；
+每次安装都从默认目录开始，不会锁死上次安装的路径。
+安装时会把演示库里的数据路径改到安装目录的 data\四通道保存，装到任何盘都能看原始波形。
+卸载向导会先确认，并明确提示 data、logs、backup 默认保留。
+装好后开始菜单里还有「用户使用手册」（PDF）与「Lion-Monitor 日志目录」两个快捷方式。
+
+=== 怎么构建 ===
+1) 双击 build.bat
+   日志：.build\build-<时间戳>.log
+   产物：dist\LionMonitor.exe（绿色包）
+         installer\output\LionMonitor-Setup-<版本>.exe（安装包）
+2) 依赖已能离线安装（wheels 里有 .whl 就不联网）
+3) 打安装包需要 Inno Setup 6；winget 装在 %LOCALAPPDATA%\Programs\Inno Setup 6 也能自动找到
+
+=== 测试数据 ===
+D:\code_python\Project\Lion-Monitor\data\四通道保存
+（3 个批次目录，CH1–CH4，用于验收导入 / 指标计算）
+
+=== 注意 ===
+- 不要删 dist\ / wheels\ / .build\，那是运行时和离线包
+- launcher/LionMonitor.cs 只能写 C# 5 语法（csc.exe 不支持 $"" / nameof / ?. ）
+- 卸载安装包会保留 data\、backup\、logs\；重装后数据可继续用

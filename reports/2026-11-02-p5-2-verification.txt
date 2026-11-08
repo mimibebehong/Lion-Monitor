@@ -1,0 +1,190 @@
+P5-2 验收证据：模板 v2 带生效值快照 + 参数三策略 + 漂移预览（S3）
+================================================================================
+任务：t_ba60e513　批次：P5-2（复查 S3）　完成时间：2026-11-02
+项目：/home/administrator/workspace/projects/Lion-Monitor
+环境：.venv（python 3.11）　数据库：全部用临时库，未碰 data/lion.db
+================================================================================
+
+一、做了什么
+--------------------------------------------------------------------------------
+1. 导出（src/lion_monitor/store/tree_template.py）
+   - 文件头新增 `params_snapshot: true`（版本号仍是 version: 2，纯增量可选字段）
+   - 已绑定的 metric 节点新增 `effective_params`：该节点实际生效的完整参数快照，
+     口径直接复用 metric_assign.compose_params（与页面展示 / 计算层同一个函数）
+   - 未绑定（bound=false）的节点不写快照：没有绑定就没有生效值
+2. 导入（同文件 _apply_params / import_template）
+   - ImportOptions.param_strategy 三选一：override（默认）/ locked_only / follow_default
+   - override：落库的是「目标任务定义默认 → 模板生效值」的 diff（目标侧再叠默认仍等于模板生效值），
+     locked 标志仍随模板走，不偷偷把未固化节点变成固化
+   - locked_only：只对模板里 locked=True 的节点按生效值搬，其余保持旧行为
+   - follow_default：旧行为（只搬覆盖 diff）
+3. 预览（同文件 _param_diffs / preview_import）
+   - ImportPreview.param_diffs 逐项给出「节点路径 × 指标码：参数 目标默认 → 模板生效值」
+   - 新增 param_diff_count / param_diff_nodes / has_snapshot；旧 v2 文件给 SNAPSHOT_MISSING_NOTE 提示
+4. 页面（app/pages/health_tree.py）
+   - 导入浮层预览区显示「N 个指标参数与目标任务默认不同（涉及 M 个指标节点）」并可展开明细
+   - 新增「参数策略」单选（按生效值搬运 / 只搬固化项 / 只搬覆盖差异），无快照时置灰
+   - 导入报告增加「按生效值搬运参数 N 个指标」与 notice 文案
+5. 口径复用（src/lion_monitor/store/metric_assign.py）
+   - 新增公开包装 definition_defaults()（内部 _definition_defaults 原样保留），
+     模板层算漂移与搬运 diff 都走它，不另写一份默认口径
+
+二、TDD：先 RED（实现前）
+--------------------------------------------------------------------------------
+$ .venv/bin/python -m pytest tests/test_tree_template_v2_effective_params.py
+F.FFFFF.F.FFF                                                            [100%]
+=================================== FAILURES ===================================
+__________ test_export_writes_full_effective_params_for_bound_metric ___________
+
+session = <sqlalchemy.orm.session.Session object at 0x7a9f1d11aa90>
+
+    def test_export_writes_full_effective_params_for_bound_metric(session):
+        src = _source(session)
+    
+        payload = tree.export_template(session, src["task"].id)
+    
+        node = _metric_node(payload)
+        assert node["params"] == {}, "节点只存覆盖 diff（旧口径不变）"
+>       assert node["effective_params"]["band_high"] == pytest.approx(1000.0)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'effective_params'
+
+tests/test_tree_template_v2_effective_params.py:151: KeyError
+___________ test_override_default_moves_effective_value_across_tasks ___________
+
+session = <sqlalchemy.orm.session.Session object at 0x7a9f1c3b6550>
+
+...
+E       AttributeError: 'ImportReport' object has no attribute 'params_overridden'
+E       Failed: DID NOT RAISE TreeError
+FAILED tests/test_tree_template_v2_effective_params.py::test_export_writes_full_effective_params_for_bound_metric
+FAILED tests/test_tree_template_v2_effective_params.py::test_override_default_moves_effective_value_across_tasks
+FAILED tests/test_tree_template_v2_effective_params.py::test_preview_lists_param_drift_before_import
+FAILED tests/test_tree_template_v2_effective_params.py::test_preview_without_drift_reports_zero
+FAILED tests/test_tree_template_v2_effective_params.py::test_follow_default_strategy_keeps_target_default
+FAILED tests/test_tree_template_v2_effective_params.py::test_locked_only_strategy_moves_only_locked_nodes
+FAILED tests/test_tree_template_v2_effective_params.py::test_unknown_param_strategy_is_rejected
+FAILED tests/test_tree_template_v2_effective_params.py::test_v2_without_snapshot_falls_back_to_follow_default_with_notice
+FAILED tests/test_tree_template_v2_effective_params.py::test_snapshot_template_reports_overridden_count
+FAILED tests/test_tree_template_v2_effective_params.py::test_effective_params_must_be_object
+10 failed, 3 passed in 7.56s
+
+三、GREEN（实现后，同一文件）
+--------------------------------------------------------------------------------
+$ .venv/bin/python -m pytest tests/test_tree_template_v2_effective_params.py
+.............                                                            [100%]
+13 passed in 7.71s
+EXIT=0
+
+四、全量回归 + 静态检查
+--------------------------------------------------------------------------------
+$ .venv/bin/python -m pytest
+........................................................................ [ 11%]
+........................................................................ [ 23%]
+........................................................................ [ 34%]
+........................................................................ [ 46%]
+........................................................................ [ 57%]
+........................................................................ [ 69%]
+........................................................................ [ 80%]
+........................................................................ [ 92%]
+.................................................                        [100%]
+625 passed in 221.52s (0:03:41)
+
+（基线 612 passed，本次新增 13 例 = 625；条数不低于 576 的要求满足）
+
+$ .venv/bin/ruff check src app tests
+$ .venv/bin/ruff format --check src app tests
+All checks passed!
+CHECK_EXIT=0
+139 files already formatted
+FMT_EXIT=0
+
+五、验收 1–4：脚本实跑
+--------------------------------------------------------------------------------
+$ .venv/bin/python scripts/verify_template_effective_params.py
+==============================================================================
+模板 S3 验收（生效值快照 + 参数三策略 + 漂移预览）　生成时间：2026-11-01 22:43:59
+临时库：/home/administrator/.hermes/profiles/coding-copilot/cache/scratch/tpl-s3-verify-mojix3ef/verify.db
+==============================================================================
+
+—— 导出（源任务 v_RMS 指标节点） ——
+params（覆盖 diff）={}
+effective_params.band_high=1000
+文件头 versions=2　params_snapshot=True
+[PASS] 验收 1-a) 导出含 effective_params，且是完整生效值（不是 diff）　band_high=1000　快照键 6 个
+
+—— 预览（目标任务默认 band_high=500） ——
+未匹配台账 0 处　参数差异 1 处　带快照=True
+     · 卷绕产线 / 隔膜过辊轴承 / CH1 / v_RMS × v_RMS：band_high 500 → 1000
+[PASS] 验收 2) 预览列出该差异 1 处，文案含「500 → 1000」　卷绕产线 / 隔膜过辊轴承 / CH1 / v_RMS × v_RMS：band_high 500 → 1000
+[PASS] 验收 2-b) 预览不写库　目标任务仍只有根节点、无指标绑定
+
+—— 导入（override，默认策略） ——
+绑定 1 个　按生效值搬运 1 个　目标 v_RMS 生效 band_high=1000
+[PASS] 验收 1) 目标节点生效值 = 1000（不再是 500）　生效 band_high=1000
+
+—— 导入（follow_default） —— 目标 v_RMS 生效 band_high=500
+[PASS] 验收 3) follow_default 仍得到 500（旧行为保留）　生效 band_high=500
+[PASS] 验收 4-a) v1 文件仍可导入　version=1　节点 {'task': 1, 'device': 1, 'component': 3, 'channel': 4, 'metric': 12}
+
+—— 老 v2 文件（无 effective_params，即便传 override） ——
+预览提示：该模板没有生效参数快照（旧版 v2 导出）：参数按「只搬覆盖差异」处理，目标任务默认与源任务不同时会静默变化，建议在源任务重新导出
+导入提示：该模板没有生效参数快照（旧版 v2 导出）：参数按「只搬覆盖差异」处理，目标任务默认与源任务不同时会静默变化，建议在源任务重新导出
+[PASS] 验收 4-b) 无 effective_params 的 v2 按 follow_default 处理并提示　生效 band_high=500　has_snapshot=False
+
+==============================================================================
+结论：S3 验收 1–4 全部通过。
+==============================================================================
+
+六、验收 5：scripts/verify_template_v2.py（脚本未改一行，默认策略=override）
+--------------------------------------------------------------------------------
+$ .venv/bin/python scripts/verify_template_v2.py /tmp/p5_2_v2.txt
+[PASS] 预览未匹配台账为空（不猜不错挂直接放行）
+[PASS] 1) 节点数/层级/名称一致　源 9 个 / 目标 9 个；类型分布 task 1, device 1, component 1, channel 2, metric 4
+[PASS] 2) 每个指标节点参数与 locked 逐节点 diff 为 0（含未绑定节点）　4 个指标节点；diff 0 处
+[PASS] 3) 阈值条数与数值一致　源 3 条 / 目标 3 条
+[PASS] 4) 再导出一次结构等价（除 exported_at / task 名）　两个模板 JSON 规范化后逐字段相同（含 3 条阈值）
+[PASS] 5) v1 旧模板仍能导入　v1 导入节点 {'task': 1, 'device': 1, 'component': 3, 'channel': 4, 'metric': 12}；提示「旧版模板（v1）：引用按自增 id 解析，能读但…」
+[PASS] 附) 台账缺失时未匹配清单一次性报错（不猜不错挂）　一次列全 7 处引用（应有 7）；树未落库，仍只有根节点
+结论：T1–T4 五条验收全部通过。
+
+（完整输出 177 行：预览/导入报告行 + 上述 PASS 行，退出码 0）
+
+七、验收项逐条结论
+--------------------------------------------------------------------------------
+1) 源 band_high=1000（无覆盖）→ 导出含 effective_params → 导入默认 500 的任务（override）
+   目标节点生效值 = 1000：**通过**（见第五节 验收 1；band_high=1000，按生效值搬运 1 个指标）
+2) 预览列出该差异 1 处，文案含「500 → 1000」：**通过**
+   （`卷绕产线 / 隔膜过辊轴承 / CH1 / v_RMS × v_RMS：band_high 500 → 1000`，且预览不写库）
+3) follow_default 策略仍得到 500（旧行为保留）：**通过**（见第五节 验收 3）
+4) v1 文件仍可导入；无 effective_params 的 v2 文件按 follow_default 处理并提示：**通过**
+   （v1 version=1、metric 12 个；老 v2 即便传 override 也只搬覆盖 diff，生效值 500，notice 含「生效参数」）
+5) scripts/verify_template_v2.py 跑通：**通过**（第五节之外，第六节 五条全 PASS，退出码 0）
+
+八、改动文件
+--------------------------------------------------------------------------------
+- src/lion_monitor/store/tree_template.py（导出快照 / 三策略 / 漂移清单 / 兼容提示）
+- src/lion_monitor/store/metric_assign.py（definition_defaults 公开包装）
+- app/pages/health_tree.py（预览差异 + 参数策略单选 + 报告文案）
+- tests/test_tree_template_v2_effective_params.py（新增 13 例）
+- tests/test_tree_template_v2_thresholds.py（唯一一处断言更新：模板文件头多了 params_snapshot，
+  该断言原本硬列文件头键集合；属本次字段变更直接导致，非无关断言）
+- scripts/verify_template_effective_params.py（新增验收脚本）
+- docs/plans/2026-10-31-指标参数体系与频率参数设计.md（§12 实施记录：版本号与兼容规则、7 条须知）
+- reports/2026-11-02-p5-2-verification.txt（本文件）
+
+九、版本号与兼容规则（结论）
+--------------------------------------------------------------------------------
+模板仍写 `version: 2`，不用 v3：
+  - version 1            → 旧 id 逻辑（不变）
+  - version 2 + params_snapshot: true → 三策略可用，默认 override
+  - version 2 + 无 params_snapshot    → 强制 follow_default 并提示（即使传了 override）
+  - version 2 + effective_params 非对象 → 校验报错
+理由：v1→v2 的差异是引用口径不兼容（自增 id vs 业务键），必须靠版本号分派；本次是纯增量字段，
+旧文件缺字段时的行为恰好就是旧行为，不需要新分派分支。
+
+十、未做项
+--------------------------------------------------------------------------------
+- 有效性业务判据（E1）、阈值推送告警（E3）、设备使用信息字段：任务书明确不做。
+- 目标任务里已有节点的历史生效值不参与漂移比较（整树替换时会被替换，见 docs §12.3 第 3 条）。
+- 历史指标的生效值快照不按模板回溯改写（与 P5-1 口径一致）。

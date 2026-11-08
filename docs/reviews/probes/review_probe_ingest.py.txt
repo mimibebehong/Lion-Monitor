@@ -1,0 +1,320 @@
+"""总体复查·只读探测（导入链路：文件校验 / 能读但内容不对 / 重复导入 / 时间口径 / 通道映射）。
+
+只读：不改 src/、app/；临时 .dat 与临时库落在 ~/workspace/temp/<日期>/review-ingest/。
+
+运行：
+    cd ~/workspace/projects/Lion-Monitor && .venv/bin/python scripts/review_probe_ingest.py
+证据输出：reports/2026-10-31-review-ingest.txt
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+from _dat_fixture import write_dat  # noqa: E402
+
+from lion_monitor.features.pipeline import import_batch  # noqa: E402
+from lion_monitor.ingest.vibration import (  # noqa: E402
+    VibrationFormatError,
+    read_vibration,
+    scan_vibration_dir,
+)
+from lion_monitor.store import (  # noqa: E402
+    datasets,
+    metric_assign,
+    metric_def,
+    object_registry,
+    tasks,
+    tree,
+)
+from lion_monitor.store import metrics as metric_store  # noqa: E402
+from lion_monitor.store.db import init_db, make_engine, make_session_factory  # noqa: E402
+
+STAMP = datetime.now().strftime("%Y-%m-%d")
+WORK = Path.home() / "workspace" / "temp" / STAMP / "review-ingest"
+OUT = ROOT / "reports" / "2026-10-31-review-ingest.txt"
+DATA = Path("/mnt/d/hermes_wp/Project/锂电产线/envision/data/四通道保存")
+FS = 32000.0
+
+lines: list[str] = []
+
+
+def say(text: str = "") -> None:
+    print(text)
+    lines.append(text)
+
+
+def head(title: str) -> None:
+    say("")
+    say("=" * 92)
+    say(title)
+    say("=" * 92)
+
+
+def fresh(name: str):
+    WORK.mkdir(parents=True, exist_ok=True)
+    path = WORK / name
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    return path, engine, make_session_factory(engine)()
+
+
+def build_tree(session, name: str, channels=("CH1", "CH2", "CH3", "CH4")):
+    task = tasks.create_task(session, name=name, operator="review")
+    obj = object_registry.create_object(session, task.id, "轴承", "轴承", part="X")
+    metric_def.seed_defaults(session, task.id)
+    root = tree.root_node(session, task.id)
+    dev = tree.create_node(session, task.id, "device", "线", parent_id=root.id, attrs={})
+    comp = tree.create_node(
+        session, task.id, "component", "轴承", parent_id=dev.id, attrs={}, ref_id=obj.id
+    )
+    for code in channels:
+        ch = tree.create_node(session, task.id, "channel", code, parent_id=comp.id, attrs={})
+        for metric in ("a_Peak", "a_RMS", "v_RMS"):
+            tree.create_node(
+                session, task.id, "metric", metric, parent_id=ch.id, attrs={"code": metric}
+            )
+            metric_assign.assign_metric(session, task.id, ch.id, metric)
+    return task
+
+
+def sig(seconds: float = 2.0, amp: float = 0.5) -> np.ndarray:
+    t = np.arange(int(seconds * FS)) / FS
+    return (amp * np.sin(2 * np.pi * 145 * t)).astype(np.float32)
+
+
+def clean_batch(name: str, channels=("CH1", "CH2")) -> Path:
+    folder = WORK / name
+    if folder.exists():
+        for item in folder.glob("*"):
+            item.unlink()
+    folder.mkdir(parents=True, exist_ok=True)
+    for code in channels:
+        write_dat(
+            folder / f"{name}-{code}.dat",
+            samples=sig(),
+            channel=code,
+            sample_rate_hz=FS,
+            started_at="20261031140000",
+        )
+    return folder
+
+
+# ---------------------------------------------------------------- 1. 能读但内容不对
+def probe_readable_but_wrong() -> None:
+    head("[I1] 「文件能读、内容不对」的静默风险：采样率 / 点数 / scale / 重复通道号")
+    path, engine, sess = fresh("ingest-wrong.db")
+    task = build_tree(sess, "内容不对")
+    ch_nodes = {n.name: n.id for n in tree.list_nodes(sess, task.id) if n.node_type == "channel"}
+
+    cases: list[tuple[str, dict, Path]] = []
+    for label, header in (
+        ("采样率=0", {"sample_rate_hz": 0.0}),
+        ("采样率=NaN", {"sample_rate_hz": float("nan")}),
+        ("scale=0（幅值全零）", {"scale": 0.0}),
+        ("scale=NaN", {"scale": float("nan")}),
+    ):
+        folder = WORK / f"case-{label}"
+        if folder.exists():
+            for item in folder.glob("*"):
+                item.unlink()
+        folder.mkdir(parents=True, exist_ok=True)
+        write_dat(
+            folder / "CH_CH1.dat",
+            samples=sig(),
+            channel="CH1",
+            started_at="20261031140100",
+            **header,
+        )
+        cases.append((label, header, folder))
+
+    zero_folder = WORK / "case-空样本"
+    if zero_folder.exists():
+        for item in zero_folder.glob("*"):
+            item.unlink()
+    zero_folder.mkdir(parents=True, exist_ok=True)
+    write_dat(
+        zero_folder / "CH_CH1.dat",
+        samples=np.array([], dtype=np.float32),
+        channel="CH1",
+        started_at="20261031140130",
+    )
+    cases.append(("头部声明 0 点（只有 512 B 头）", {}, zero_folder))
+
+    for label, header, folder in cases:
+        meta = read_vibration_header_safe(folder)
+        try:
+            result = import_batch(sess, task.id, folder, ch_nodes, compute=True)
+            rows = metric_store.list_values(sess, task.id, "CH1")
+            say(
+                f"　{label:<26} 读出 fs={meta}　→ 导入 status={result.status} "
+                f"files_ok={result.files_ok} 值 {result.metrics_written} 行 "
+                f"坏文件 {[(b.filename, b.reason[:40]) for b in result.files_bad]}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            sess.rollback()
+            say(
+                f"　{label:<26} 读出 fs={meta}　→ 抛出 {type(exc).__name__}: {str(exc).splitlines()[0][:90]}"
+            )
+            with engine.connect() as conn:
+                say(
+                    f"　　（已提交残留：dataset {conn.exec_driver_sql('SELECT COUNT(*) FROM dataset').scalar()} 行，"
+                    f"channel {conn.exec_driver_sql('SELECT COUNT(*) FROM channel').scalar()} 行，"
+                    f"metric_value {conn.exec_driver_sql('SELECT COUNT(*) FROM metric_value').scalar()} 行）"
+                )
+
+    say("")
+    say("　同批两个文件写同一个通道号（envis 可能出 -CH1_Task1 / -CH1_Task2）：")
+    folder = WORK / "case-同通道两文件"
+    if folder.exists():
+        for item in folder.glob("*"):
+            item.unlink()
+    folder.mkdir(parents=True, exist_ok=True)
+    for task_no in (1, 2):
+        write_dat(
+            folder / f"CH1_Task{task_no}.dat",
+            samples=sig(),
+            channel="CH1",
+            started_at=f"2026103114020{task_no}",
+        )
+    try:
+        result = import_batch(sess, task.id, folder, ch_nodes, compute=True)
+        say(f"　　→ status={result.status} 文件 {result.files_ok} 个")
+    except Exception as exc:  # noqa: BLE001
+        sess.rollback()
+        say(f"　　→ 抛出 {type(exc).__name__}: {str(exc).splitlines()[0][:120]}")
+        say("　　→ 该异常不在页面捕获的 (DatasetError, VibrationFormatError, ValueError) 内")
+
+    say("")
+    say("　头部时间字段不可解析（如 20261345256000）：")
+    folder = WORK / "case-时间非法"
+    if folder.exists():
+        for item in folder.glob("*"):
+            item.unlink()
+    folder.mkdir(parents=True, exist_ok=True)
+    write_dat(folder / "CH_CH1.dat", samples=sig(), channel="CH1", started_at="20261345256000")
+    try:
+        scan_vibration_dir(folder)
+        say("　　→ 扫描通过")
+    except VibrationFormatError as exc:
+        say(f"　　→ 扫描阶段抛 VibrationFormatError：{str(exc)[:110]}")
+        say("　　→ 整批在「扫描」就被拒（数据集都不建），页面只报一条错误，其余正常文件也进不来")
+    sess.close()
+
+
+def read_vibration_header_safe(folder: Path) -> str:
+    try:
+        metas = scan_vibration_dir(folder)
+        if not metas:
+            return "—"
+        meta = metas[0]
+        return f"{meta.sample_rate_hz:g} Hz / {meta.sample_count} 点 / scale={meta.scale:g}"
+    except Exception as exc:  # noqa: BLE001
+        return f"（扫描失败 {type(exc).__name__}）"
+
+
+# ---------------------------------------------------------------- 2. 通道映射
+def probe_channel_mapping() -> None:
+    head("[I2] 通道映射：树上配了但批次没有（missing）/ 批次有但树上没有（unmapped）")
+    path, engine, sess = fresh("ingest-map.db")
+    task = build_tree(sess, "映射")
+    ch_nodes = {n.name: n.id for n in tree.list_nodes(sess, task.id) if n.node_type == "channel"}
+    folder = clean_batch("map-3ch", channels=("CH1", "CH2", "CH5"))
+    result = import_batch(sess, task.id, folder, ch_nodes, compute=True)
+    say(f"　树上通道：{sorted(ch_nodes)}　批次文件通道：['CH1','CH2','CH5']")
+    say(f"　→ status={result.status} channels={result.channels} files_ok={result.files_ok}")
+    say(f"　→ unmapped_channels（有文件、树上没节点）= {result.unmapped_channels}")
+    say(
+        f"　→ ImportResult 字段清单：{sorted(f.name for f in __import__('dataclasses').fields(result))}"
+    )
+    say("　→ 没有 missing_channels 字段：树上 CH3/CH4 本批没有文件，页面无任何提示（T-1 仍未实现）")
+    sess.close()
+
+
+# ---------------------------------------------------------------- 3. 重复导入 / 时间口径
+def probe_time_and_duplicate() -> None:
+    head("[I3] 时间口径（文件名 / 文件头 / 落库）与重复导入幂等")
+    path, engine, sess = fresh("ingest-time.db")
+    task = build_tree(sess, "时间口径")
+    ch_nodes = {n.name: n.id for n in tree.list_nodes(sess, task.id) if n.node_type == "channel"}
+    batch = sorted(p for p in DATA.iterdir() if p.is_dir())[0]
+    files = sorted(batch.glob("*.dat"))
+    first = files[0]
+    meta = read_vibration(first)
+    say(f"　样例文件：{first.name}")
+    say(
+        f"　　文件名里的时间：{batch.name}（目录名）／文件 mtime {datetime.fromtimestamp(first.stat().st_mtime):%Y-%m-%d %H:%M:%S}"
+    )
+    say(
+        f"　　文件头 started_at：{meta.meta.started_at:%Y-%m-%d %H:%M:%S}（无时区字段，按本地时间直接 parse）"
+    )
+    row = datasets.import_from_dir(sess, task.id, batch)
+    say(f"　　落库 dataset.collected_at：{row.collected_at}（= 同批各文件头 started_at 的最大值）")
+    say(f"　　落库 dataset.imported_at：{row.created_at:%Y-%m-%d %H:%M:%S}（服务器当前时间）")
+    say(
+        "　　三处口径：文件名/目录名不参与落库；文件头时间做采集时间；imported_at 做导入时间；一律 naive 本地时间，没有 TZ 记录"
+    )
+
+    again = datasets.import_from_dir(sess, task.id, batch)
+    say(
+        f"　同目录二次 import_from_dir：{'同一数据集 ' + again.code if again.id == row.id else '★ 新建了 ' + again.code}"
+    )
+    r1 = import_batch(sess, task.id, batch, ch_nodes, compute=True)
+    before = len(metric_store.list_values(sess, task.id, "CH2", "v_RMS"))
+    r2 = import_batch(sess, task.id, batch, ch_nodes, compute=True)
+    after = len(metric_store.list_values(sess, task.id, "CH2", "v_RMS"))
+    say(
+        f"　同批重导两次（compute=True）：v_RMS 行数 {before} → {after}"
+        f"（同一 computed_at 先删后写，值不翻倍）"
+    )
+    say(
+        f"　　两次返回 dataset_id {r1.dataset_id} / {r2.dataset_id}；状态 {r1.status} / {r2.status}"
+    )
+    sess.close()
+
+
+# ---------------------------------------------------------------- 4. 批次状态口径
+def probe_status_semantics() -> None:
+    head("[I4] 批次状态口径：部分有效 / 全部无效 / 无指标 三种情况怎么标")
+    path, engine, sess = fresh("ingest-status.db")
+    task = build_tree(sess, "状态口径")
+    ch_nodes = {n.name: n.id for n in tree.list_nodes(sess, task.id) if n.node_type == "channel"}
+    folder = clean_batch("status-partial", channels=("CH1", "CH2"))
+    target = next(folder.glob("*CH2*.dat"))
+    target.write_bytes(target.read_bytes()[:-1024])
+    result = import_batch(sess, task.id, folder, ch_nodes, compute=True)
+    say(
+        f"　2 文件、1 个截断：status={result.status} files_ok={result.files_ok}/{result.channels} "
+        f"指标值 {result.metrics_written} 行"
+    )
+    say(
+        f"　→ 数据集被判「无效」，但 CH1 的 3 个指标值已落库并参与趋势/评级："
+        f"{[round(r.value, 4) for r in metric_store.list_values(sess, task.id, 'CH1', 'v_RMS')]}"
+    )
+    say(f"　备注：{result.remark}")
+    sess.close()
+
+
+def main() -> None:
+    head(f"Lion-Monitor 总体复查 · 导入链路探测　{datetime.now():%Y-%m-%d %H:%M:%S}")
+    probe_readable_but_wrong()
+    probe_channel_mapping()
+    probe_time_and_duplicate()
+    probe_status_semantics()
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n已写：{OUT}")
+
+
+if __name__ == "__main__":
+    main()

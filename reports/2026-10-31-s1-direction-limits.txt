@@ -1,0 +1,85 @@
+================================================================================
+S-1 验收：阈值「越小越差」（lower）方向保存必失败 —— 修复后实跑证据
+生成时间：2026-10-31　基线提交：4b1e139
+口径：马哥 2026-10-31 拍板 —— warn 是级别更轻，不是数值更小；校验按方向
+      upper（越大越差）warn < alert；lower（越小越差）warn > alert
+================================================================================
+
+[0] 基线：改动前全量 461 passed（stash 掉本轮全部改动后实跑）；改动后全量 485 passed（+24 条新测试）
+
+[A] 验收 1 的「失败测试先行」证据（RED）
+    做法：把 4 个改动文件（store/limits.py、store/tree_template.py、features/health.py、
+    app/pages/thresholds.py）临时 stash 回改动前，保留新测试与新规则模块，再跑测试：
+
+=========================== short test summary info ============================
+FAILED tests/test_page_thresholds.py::test_lower_direction_warn_3_alert_1_saves_and_reads_back
+FAILED tests/test_page_thresholds.py::test_lower_direction_warn_1_alert_3_reports_direction_error
+FAILED tests/test_page_thresholds.py::test_upper_direction_warn_4_5_alert_2_8_reports_direction_error
+FAILED tests/test_page_thresholds.py::test_legacy_reversed_lower_row_is_flagged_not_silently_changed
+FAILED tests/test_store_metrics_limits.py::test_set_limit_accepts_lower_direction_warn_above_alert
+FAILED tests/test_store_metrics_limits.py::test_set_limit_rejects_upper_direction_with_warn_above_alert
+FAILED tests/test_tree_template_v2_thresholds.py::test_lower_threshold_roundtrip_keeps_values_and_grading
+FAILED tests/test_tree_template_v2_thresholds.py::test_import_rejects_lower_row_with_warn_not_above_alert
+8 failed, 41 passed in 18.81s
+
+[B] 验收 1 / 2 / 4 / 5 实跑脚本输出（scripts/verify_s1_direction_limits_2026-10-31.py）
+    临时库，不碰 data/lion.db；「迁移前判级」直接执行 git 4b1e139 里的旧 point_level
+
+临时库：/home/administrator/.hermes/profiles/coding-copilot/cache/scratch/s1-verify-mwdgr7so/verify.db
+旧实现来源：git 4b1e139:src/lion_monitor/features/health.py
+------------------------------------------------------------------------------
+[验收 1] 保存路径：按方向校验（上限 warn<alert，下限 warn>alert）
+　下限 油压 warn=3 / alert=1 → 保存成功：warn=3 alert=1 direction=<
+　读回：(3.0, 1.0, '<', '指标级')
+　上限 warn=4.5 / alert=2.8 → LimitError：方向「上限（越大越差）」要求 warn < alert：warn 填较轻的门槛（数值较小），alert 填更严重的门槛（数值较大）；收到 warn=4.5, alert=2.8
+　下限 warn=1 / alert=3 → LimitError：方向「下限（越小越差）」要求 warn > alert：warn 填较轻的门槛（数值较大），alert 填更严重的门槛（数值较小）；收到 warn=1, alert=3
+　上限 振动 warn=2.8 / alert=4.5 → 保存成功
+------------------------------------------------------------------------------
+[验收 2] 判级（grade）方向口径
+　下限 油压 warn=3 / alert=1：
+　　值 3.2  → grade=normal　point_level=ok
+　　值 2.5  → grade=warn　point_level=warn
+　　值 0.8  → grade=alert　point_level=alert
+　上限 振动 warn=2.8 / alert=4.5：
+　　值 1.0  → grade=normal　point_level=ok
+　　值 2.9  → grade=warn　point_level=warn
+　　值 5.0  → grade=alert　point_level=alert
+------------------------------------------------------------------------------
+[验收 4] 模板 v2 往返：下限阈值导出 → 导入新任务
+　导出：[{'path': ['卷绕产线', '隔膜过辊轴承', 'CH1', '油压'], 'metric_code': '油压', 'warn': 3.0, 'alert': 1.0, 'direction': 'lower', 'enabled': True}]
+　导入：thresholds_written=2
+　源任务上限值/判级：3/1 <　判级 3.2/2.5/0.8 = ok/warn/alert
+　目标任务上限值/判级：3/1 <　判级 3.2/2.5/0.8 = ok/warn/alert
+　往返一致：True
+------------------------------------------------------------------------------
+[验收 5] 老数据 direction="<"：读得到、判级不变、数值不改
+　老行 A（下限 3/1）：读回 3/1 direction=<　问题标记：None
+　　值 (3.2, 2.5, 0.8) 迁移前判级 ['ok', 'warn', 'alert'] / 现在 ['ok', 'warn', 'alert'] → 一致 True
+　老行 B（下限 0.2/0.5，反向）：读回 0.2/0.5 direction=<　问题标记：方向「下限（越小越差）」要求 warn > alert：warn 填较轻的门槛（数值较大），alert 填更严重的门槛（数值较小）；收到 warn=0.2, alert=0.5
+　　值 (0.1, 0.3, 0.6) 迁移前判级 ['alert', 'alert', 'ok'] / 现在 ['alert', 'alert', 'ok'] → 一致 True
+　库里数值（未改动）：[('油压', 3.0, 1.0, '<'), ('v_RMS', 0.2, 0.5, '<')]
+------------------------------------------------------------------------------
+[验收 3] 阈值设置页 AppTest：下限 3/1 保存 + 下限 1/3 报错
+　初始：异常=[] 表格行数=2 方向列=['上限（越大越差）', '上限（越大越差）']
+　选下限后提示：['下限（越小越差）：warn 填较轻的门槛（数值较大），alert 填更严重的门槛（数值较小），即要求 warn > alert']
+　保存结果：异常=[] 错误=[] 成功=['已保存 1 行阈值']
+　回显：warn=3 alert=1 方向=下限（越小越差）
+　库内：[('v_RMS', 3.0, 1.0, '<')]
+　下限 1/3 保存：异常=[] 错误=['CH1 · v_RMS：方向「下限（越小越差）」要求 warn > alert：warn 填较轻的门槛（数值较大），alert 填更严重的门槛（数值较小）；收到 warn=1, alert=3']
+　库内（未写入）：[('v_RMS', 3.0, 1.0, '<')]
+------------------------------------------------------------------------------
+结论：上述输出即 S-1 六条验收的实跑证据。
+
+[C] 验收 3 页面 AppTest（pytest -v）
+============================= 49 passed in 19.89s ==============================
+
+[D] 验收 6 全量测试不回归（真实末尾输出）
+........................................................................ [ 14%]
+........................................................................ [ 29%]
+........................................................................ [ 44%]
+........................................................................ [ 59%]
+........................................................................ [ 74%]
+........................................................................ [ 89%]
+.....................................................                    [100%]
+485 passed in 168.08s (0:02:48)
+================================================================================

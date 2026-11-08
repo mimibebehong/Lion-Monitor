@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 数据库文件（本机运行生成）
+data/lion.db
+data/lion.db-journal
+data/lion.db-wal
+data/lion.db-shm
+# 整库备份（scripts/backup_db.py 产物，留在本机不进版本库）
+data/backups/
+# 界面记住的选择（每台机器各自不同，不入库）
+data/ui_settings.json
+
+# 数据（原始数据不入库，见 data/README.md）
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+
+# 日志与产物
+logs/
+*.log
+reports/*.html
+reports/figures/*.png
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+
+# 本地开发服务脚本产生的临时文件
+.dev_serve.pid
+.dev_serve.log
+
+# Windows 构建产物（scripts/build_win.ps1 生成，不进版本库）
+dist/
+.build/
+installer/output/
+# 离线 wheel 缓存（scripts/build_win.ps1 的离线依赖源）
+wheels/
+
+# 构建产物与离线构建材料（不进版本库，见 docs/plans/2026-11-05-Windows部署提速调研.md）
+dist/
+wheels/
+.build/
+installer/output/
+*.7z

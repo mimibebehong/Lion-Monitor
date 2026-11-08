@@ -1,0 +1,341 @@
+"""总体复查·只读探测（12 个页面的空态 / 有数据态 / 同通道多节点混值影响面）。
+
+只读：不改 src/、app/；库都是 ~/workspace/temp/<日期>/review-pages/ 下的临时库。
+页面用 streamlit.testing.v1.AppTest 真实执行。
+
+运行：
+    cd ~/workspace/projects/Lion-Monitor && .venv/bin/python scripts/review_probe_pages.py
+证据输出：reports/2026-10-31-review-pages.txt
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import traceback
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "app"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+from lion_monitor.features.health import node_health  # noqa: E402
+from lion_monitor.features.pipeline import import_batch  # noqa: E402
+from lion_monitor.store import (  # noqa: E402
+    datasets,
+    limits,
+    metric_assign,
+    metric_def,
+    object_registry,
+    tasks,
+    tree,
+)
+from lion_monitor.store import metrics as metric_store  # noqa: E402
+from lion_monitor.store.db import init_db, make_engine, make_session_factory  # noqa: E402
+
+STAMP = datetime.now().strftime("%Y-%m-%d")
+WORK = Path.home() / "workspace" / "temp" / STAMP / "review-pages"
+OUT = ROOT / "reports" / "2026-10-31-review-pages.txt"
+DATA = Path("/mnt/d/hermes_wp/Project/锂电产线/envision/data/四通道保存")
+FS = 32000.0
+
+PAGES = {
+    "工作台": "home.py",
+    "任务列表": "tasks.py",
+    "健康树配置": "health_tree.py",
+    "监测对象": "objects.py",
+    "传感器": "sensors.py",
+    "指标配置": "metrics.py",
+    "阈值设置": "thresholds.py",
+    "数据接入": "ingest.py",
+    "趋势分析": "trends.py",
+    "数据集管理": "datasets.py",
+    "数据分析": "channel_analysis.py",
+    "回收站": "recycle_bin.py",
+}
+
+lines: list[str] = []
+
+
+def say(text: str = "") -> None:
+    print(text)
+    lines.append(text)
+
+
+def head(title: str) -> None:
+    say("")
+    say("=" * 92)
+    say(title)
+    say("=" * 92)
+
+
+def run_pages(db: Path, task_id: int | None, label: str, click_analysis: bool = False) -> None:
+    """把一个库指给页面并逐页跑 AppTest。"""
+    os.environ["LION_DB"] = str(db)
+    import store_ctx
+    from streamlit.testing.v1 import AppTest
+
+    store_ctx._session_factory.clear()
+    say("")
+    say(f"　【{label}】库 {db.name}　task_id={task_id}")
+    say(f"　{'页面':<10}{'异常':<8}{'info/warning':<14}关键文案")
+    for title, filename in PAGES.items():
+        try:
+            at = AppTest.from_file(str(ROOT / "app" / "pages" / filename), default_timeout=120)
+            if task_id is not None:
+                at.session_state["current_task_id"] = task_id
+            at.run()
+            errors = [str(item.value)[:160].replace("\n", " ") for item in at.exception]
+            infos = [str(item.value)[:60].replace("\n", " ") for item in at.info] + [
+                str(item.value)[:60].replace("\n", " ") for item in at.warning
+            ]
+            captions = [str(item.value) for item in at.caption]
+            key_text = ""
+            for text in infos + captions:
+                if any(word in text for word in ("还没有", "空", "没有", "先", "去")):
+                    key_text = text[:70]
+                    break
+            say(f"　{title:<10}{len(errors):<8}{len(infos):<14}{key_text}")
+            for err in errors:
+                say(f"　　★ {err}")
+            if click_analysis and title == "数据分析" and not errors:
+                try:
+                    options = list(at.selectbox(key="ana_ds").options)
+                    if options:
+                        at.selectbox(key="ana_ds").select(options[0]).run()
+                        chs = list(at.selectbox(key="ana_ch").options)
+                        if chs:
+                            at.selectbox(key="ana_ch").select(chs[0]).run()
+                        at.button(key="fft_run").click().run()
+                        extra = [str(item.value)[:120] for item in at.exception]
+                        say(f"　　点击「频谱分析」后异常 {len(extra)} 个 {extra}")
+                except Exception as exc:  # noqa: BLE001
+                    say(f"　　点击分析页控件失败：{type(exc).__name__}: {exc}")
+        except Exception:  # noqa: BLE001
+            say(f"　{title:<10}AppTest 自身崩溃：{traceback.format_exc().splitlines()[-1]}")
+    store_ctx._session_factory.clear()
+
+
+# ---------------------------------------------------------------- 场景库构建
+def db_empty() -> Path:
+    WORK.mkdir(parents=True, exist_ok=True)
+    path = WORK / "pages-empty.db"
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    return path
+
+
+def db_task_only() -> tuple[Path, int]:
+    path = WORK / "pages-taskonly.db"
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    sess = make_session_factory(engine)()
+    task = tasks.create_task(sess, name="只有任务", operator="review")
+    sess.close()
+    return path, task.id
+
+
+def db_tree_no_metrics() -> tuple[Path, int]:
+    path = WORK / "pages-nometrics.db"
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    sess = make_session_factory(engine)()
+    task = tasks.create_task(sess, name="通道无指标", operator="review")
+    obj = object_registry.create_object(sess, task.id, "轴承A", "轴承", part="X")
+    metric_def.seed_defaults(sess, task.id)
+    root = tree.root_node(sess, task.id)
+    dev = tree.create_node(sess, task.id, "device", "线", parent_id=root.id, attrs={})
+    comp = tree.create_node(
+        sess, task.id, "component", "轴承A", parent_id=dev.id, attrs={}, ref_id=obj.id
+    )
+    for code in ("CH1", "CH2"):
+        tree.create_node(sess, task.id, "channel", code, parent_id=comp.id, attrs={})
+    sess.close()
+    return path, task.id
+
+
+def build_full(db: Path, multi_node: bool = False) -> tuple[int, dict]:
+    """建任务 + 树 + 导入 3 个现场批次。multi_node=True 时同一通道号挂两个对象。"""
+    engine = make_engine(db)
+    init_db(engine)
+    sess = make_session_factory(engine)()
+    task = tasks.create_task(sess, name="现场任务", operator="review")
+    metric_def.seed_defaults(sess, task.id)
+    defs = {row.code: row for row in metric_def.list_metrics(sess, task.id)}
+    root = tree.root_node(sess, task.id)
+    dev = tree.create_node(sess, task.id, "device", "卷绕产线", parent_id=root.id, attrs={})
+    refs = {"objs": [], "metric_nodes": {}}
+    objects = ["隔膜过辊轴承", "收卷辊轴承"] if multi_node else ["隔膜过辊轴承"]
+    for obj_name in objects:
+        obj = object_registry.create_object(sess, task.id, obj_name, "轴承", part=obj_name)
+        refs["objs"].append(obj)
+        comp = tree.create_node(
+            sess, task.id, "component", obj_name, parent_id=dev.id, attrs={}, ref_id=obj.id
+        )
+        for code in ("CH1", "CH2", "CH3", "CH4"):
+            ch = tree.create_node(sess, task.id, "channel", code, parent_id=comp.id, attrs={})
+            for metric in ("a_Peak", "a_RMS", "v_RMS"):
+                node = tree.create_node(
+                    sess,
+                    task.id,
+                    "metric",
+                    metric,
+                    parent_id=ch.id,
+                    attrs={"code": metric, "单位": defs[metric].unit},
+                    ref_id=defs[metric].id,
+                )
+                refs["metric_nodes"][(obj_name, code, metric)] = node.id
+                metric_assign.assign_metric(sess, task.id, ch.id, metric)
+            # 两个对象的阈值故意不同：用来观察同通道多节点是否混值
+            factor = 1.0 if obj_name == objects[0] else 50.0
+            limits.set_limit(
+                sess,
+                task.id,
+                refs["metric_nodes"][(obj_name, code, "v_RMS")],
+                "v_RMS",
+                4.5 * factor,
+                11.2 * factor,
+            )
+            limits.set_limit(
+                sess,
+                task.id,
+                refs["metric_nodes"][(obj_name, code, "a_Peak")],
+                "a_Peak",
+                1.5 * factor,
+                3.0 * factor,
+            )
+            limits.set_limit(
+                sess,
+                task.id,
+                refs["metric_nodes"][(obj_name, code, "a_RMS")],
+                "a_RMS",
+                1.2 * factor,
+                2.0 * factor,
+            )
+    for batch in sorted(p for p in DATA.iterdir() if p.is_dir()):
+        import_batch(sess, task.id, batch, {}, compute=True)
+    sess.close()
+    return task.id, refs
+
+
+def probe_empty_scenarios() -> None:
+    head("[G1] 空态：全新空库 / 只有任务 / 有树但通道没挂指标")
+    path = db_empty()
+    run_pages(path, None, "全新空库（首次访问会自动播种示例任务）")
+    engine = make_engine(path)
+    sess = make_session_factory(engine)()
+    say(f"　空库首次 AppTest 后：任务 {[r.code + '·' + r.name for r in tasks.list_tasks(sess)]}")
+    say(
+        f"　节点数：{len(tree.list_nodes(sess, sess.execute(__import__('sqlalchemy').text('SELECT id FROM test_task LIMIT 1')).scalar()))}"
+        if tasks.list_tasks(sess)
+        else "　节点数：0"
+    )
+    sess.close()
+
+    path, task_id = db_task_only()
+    run_pages(path, task_id, "只有任务，没有健康树")
+    path, task_id = db_tree_no_metrics()
+    run_pages(path, task_id, "健康树有通道但没挂指标")
+    engine = make_engine(path)
+    sess = make_session_factory(engine)()
+    from lion_monitor.features.pipeline import metric_plan
+
+    say(
+        f"　该任务的 metric_plan：{[(r.object_name, r.channel_code, r.metric_codes) for r in metric_plan(sess, task_id)]}"
+    )
+    sess.close()
+
+
+def probe_full_pages() -> None:
+    head("[G2] 有数据态：现场 3 批次 × 4 通道 × 3 指标（12 页逐页跑）")
+    WORK.mkdir(parents=True, exist_ok=True)
+    path = WORK / "pages-full.db"
+    if path.exists():
+        path.unlink()
+    task_id, refs = build_full(path)
+    engine = make_engine(path)
+    sess = make_session_factory(engine)()
+    say(
+        f"　库内：数据集 {len(datasets.list_datasets(sess, task_id))} 个，"
+        f"指标值 {len([r for c in ('CH1', 'CH2', 'CH3', 'CH4') for m in ('a_Peak', 'a_RMS', 'v_RMS') for r in metric_store.list_values(sess, task_id, c, m)])} 行"
+    )
+    sess.close()
+    run_pages(path, task_id, "有数据（正常路径）", click_analysis=True)
+
+
+def probe_multi_node_mixing() -> None:
+    head("[G3] 同通道号挂两个监测对象：趋势 / 健康评级 / 概览 是否混值（影响面确认）")
+    path = WORK / "pages-multinode.db"
+    if path.exists():
+        path.unlink()
+    task_id, refs = build_full(path, multi_node=True)
+    engine = make_engine(path)
+    sess = make_session_factory(engine)()
+    n_ds = len(datasets.list_datasets(sess, task_id))
+    rows = metric_store.list_values(sess, task_id, "CH2", "v_RMS")
+    node_ids = {
+        refs["metric_nodes"][(obj, "CH2", "v_RMS")] for obj in ("隔膜过辊轴承", "收卷辊轴承")
+    }
+    say(f"　数据集 {n_ds} 个；CH2·v_RMS 按「通道号」取到 {len(rows)} 行（节点 {sorted(node_ids)}）")
+    by_time: dict[str, list[float]] = {}
+    for row in rows:
+        by_time.setdefault(row.computed_at, []).append(row.value)
+    for when, values in by_time.items():
+        say(
+            f"　　{when}: {len(values)} 个值 {[round(v, 3) for v in values]}　node={[r.node_id for r in rows if r.computed_at == when]}"
+        )
+    say(
+        "　→ 趋势页 trends.py:193 调 list_values 不传 node_id：同一时间点会出现 2 条重叠曲线点，"
+        "画图时按时间排序后连成锯齿；CSV 导出同样混两份值"
+    )
+
+    health = node_health(sess, task_id)
+    for (obj_name, code, metric), node_id in sorted(refs["metric_nodes"].items()):
+        if code != "CH2" or metric != "v_RMS":
+            continue
+        item = health[node_id]
+        say(
+            f"　健康评级 {obj_name}·CH2·v_RMS：state={item.state} latest={item.latest_value} 超限={item.over_count}"
+        )
+    say(
+        "　→ 两个节点阈值相差 50 倍，但评级结果相同：health.py:70 的 series 用 "
+        "(通道名, 指标码) 做缓存键、list_values 不传 node_id，两节点的「最新值」取的是同一串混值"
+    )
+
+    from lion_monitor.features.overview import task_overview
+
+    overview = task_overview(sess, task_id)
+    say(
+        f"　概览：指标值 {overview.metric_value_count} 行 · 越限点 {overview.over_count} · "
+        f"健康分布 {overview.health_counts}"
+    )
+    seen = {}
+    for record in overview.over_records:
+        key = (record.channel, record.code, record.computed_at, round(record.value, 4))
+        seen[key] = seen.get(key, 0) + 1
+    dup = {k: v for k, v in seen.items() if v > 1}
+    say(f"　超限记录 {len(overview.over_records)} 条，完全重复（通道+指标+时间+值）{len(dup)} 组")
+    sess.close()
+    run_pages(path, task_id, "同通道多节点（页面是否报错/混值）")
+
+
+def main() -> None:
+    head(f"Lion-Monitor 总体复查 · 页面探测　{datetime.now():%Y-%m-%d %H:%M:%S}")
+    probe_empty_scenarios()
+    probe_full_pages()
+    probe_multi_node_mixing()
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n已写：{OUT}")
+
+
+if __name__ == "__main__":
+    main()

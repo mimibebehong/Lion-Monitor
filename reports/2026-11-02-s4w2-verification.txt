@@ -1,0 +1,155 @@
+S4W-2 验收报告：a_Peak / a_RMS 补 window_s 口径一致（时域指标切窗）
+==============================================================
+
+项目：/home/administrator/workspace/projects/Lion-Monitor
+日期：2026-11-02
+任务：kanban t_4c418c49（S4W-2，父卡 S4W-1 = t_f8f58e07）
+基线：810dc3a（S4W-1 收尾，全量 pytest 728 passed）
+
+一、改动清单（提交 sha 与文件）
+--------------------------------------------------------------
+0e26c6a  test(s4w2): 时域指标按 window_s/step_s 切窗的失败测试（先 RED：12 failed）
+   新增 tests/test_features_metrics_window_time.py（7 条）
+   新增 tests/test_features_pipeline_window_time.py（5 条）
+   修改 tests/test_params_schema.py（新增 schema 断言 1 条）
+   修改 tests/test_page_metric_params.py（新增 AppTest 表单断言 2 条，参数化 a_Peak/a_RMS）
+
+0f434fd  fix(params): a_Peak/a_RMS 补 window_s/step_s 参数声明，默认 2 s/2 s 与频域同口径
+   src/lion_monitor/params.py            PARAM_SCHEMA["a_Peak"] / ["a_RMS"] 各补 window_s / step_s
+                                         （group=basic，default=2.0，min=0.05，与 v_RMS 同值同组）
+   tests/test_params_schema.py           历史默认值断言按新 schema 更新
+   tests/test_params.py                  同上
+
+bbf2ed2  fix(metrics): 时域指标按 window_s/step_s 逐窗产出，复用 window_plan
+   src/lion_monitor/features/metrics.py  WINDOWED_CODES = tuple(METRIC_UNITS)（L51）；
+                                         新增 _time_value()（L228）；compute_metric_series 改为
+                                         「全部指标走同一把 window_plan」（L235-283）：逐窗去直流后
+                                         a_Peak=max|x| / a_RMS=sqrt(mean(x^2))，偏移统一取窗中心；
+                                         window_fn 仅喂给 v_RMS
+   src/lion_monitor/features/pipeline.py 仅注释（落库注释去掉「时域指标 1 点」）
+   tests/test_features_metrics_window.py 整段口径断言改为窗口径
+   tests/test_features_pipeline_window.py 同上（落库侧）
+
+（本报告 + 方案文档 §14 + 待办看板随后单独一次 docs 提交）
+
+二、TDD 过程
+--------------------------------------------------------------
+2.1 RED（实现前）
+命令：
+  .venv/bin/python -m pytest tests/test_features_metrics_window_time.py \
+      tests/test_features_pipeline_window_time.py tests/test_params_schema.py -p no:randomly
+真实输出（尾段）：
+  FAILED tests/test_features_metrics_window_time.py::test_20s_2s_window_gives_ten_a_peak_and_a_rms_points_at_window_centers
+  FAILED tests/test_features_metrics_window_time.py::test_a_rms_per_window_matches_manual_segment_rms_within_1e_9
+  FAILED tests/test_features_metrics_window_time.py::test_a_peak_per_window_matches_manual_segment_peak
+  FAILED tests/test_features_metrics_window_time.py::test_window_plan_is_shared_with_frequency_metrics
+  FAILED tests/test_features_metrics_window_time.py::test_short_record_below_one_window_is_one_point_at_segment_center
+  FAILED tests/test_features_pipeline_window_time.py::test_import_20s_writes_ten_points_per_time_domain_metric
+  FAILED tests/test_features_pipeline_window_time.py::test_frequency_and_time_metrics_share_the_same_point_count
+  FAILED tests/test_features_pipeline_window_time.py::test_time_domain_window_params_come_from_node_override
+  FAILED tests/test_features_pipeline_window_time.py::test_trend_reads_ten_time_domain_points
+  FAILED tests/test_params_schema.py::test_time_domain_schema_declares_window_and_step
+  10 failed, 31 passed in 2.00s
+
+代表性失败信息（真实）：
+  assert len(rows) == len(plotted) == 10
+  E  AssertionError: assert 1 == 10
+  E    where 1 = len([ValueRow(..., metric_code='a_Peak', value=0.9760410785675058,
+  E                     computed_at='2026-10-29 15:28:34', ...)])
+  assert ['detrend'] == ['window_s', 'step_s']
+
+  .venv/bin/python -m pytest tests/test_page_metric_params.py -k "time_domain_metric_form" -p no:randomly
+  AssertionError: 找不到数值控件 计算时长（s）：['本节点转速（rpm）· 未设置']
+  2 failed, 18 deselected in 1.41s
+
+2.2 GREEN（实现后）
+命令：.venv/bin/python -m pytest -p no:randomly
+真实输出（尾段）：
+  ........................................................................ [ 96%]
+  .......................                                                  [100%]
+  743 passed in 55.15s
+（基线 728 + 新增 15 条：metrics 7 + pipeline 5 + schema 1 + AppTest 2）
+
+命令：.venv/bin/ruff check src app tests
+真实输出：All checks passed!
+命令：.venv/bin/ruff format --check src app tests
+真实输出：162 files already formatted
+
+三、验收项逐条
+--------------------------------------------------------------
+验收 1：20 s 数据 2 s 窗 → a_Peak 与 a_RMS 各 10 个值；第 k 个 a_RMS 与手工对第 k 段算的 RMS
+        相对误差 < 1e-9
+真实命令（一次性脚本，采样率 32 kHz、120+300 Hz 双音 + 固定种子噪声）：
+  .venv/bin/python /home/administrator/.hermes/profiles/coding-copilot/cache/scratch/s4w2_check.py
+真实输出：
+  样本数=640000  采样率=32000 Hz  时长=20 s  窗=2 s  步长=2 s
+  窗数=10  首窗=(0, 64000)  末窗=(576000, 640000)
+  a_Peak 点数=10  a_RMS 点数=10
+
+  k  偏移(s)  a_Peak(接口)   手工峰值       a_RMS(接口)     手工RMS         相对误差
+  1     1.0  1.046990236257  1.046990236257  0.583323910788  0.583323910788  0.000e+00
+  2     3.0  1.039097098444  1.039097098444  0.583363011800  0.583363011800  0.000e+00
+  3     5.0  1.033245348456  1.033245348456  0.583475862472  0.583475862472  0.000e+00
+  4     7.0  1.042383172424  1.042383172424  0.583467701745  0.583467701745  0.000e+00
+  5     9.0  1.046149011301  1.046149011301  0.583360604679  0.583360604679  0.000e+00
+  6    11.0  1.051005320443  1.051005320443  0.583562008926  0.583562008926  0.000e+00
+  7    13.0  1.043750639656  1.043750639656  0.583431321953  0.583431321953  0.000e+00
+  8    15.0  1.041687567040  1.041687567040  0.583604998690  0.583604998690  0.000e+00
+  9    17.0  1.040840417399  1.040840417399  0.583421173885  0.583421173885  0.000e+00
+  10   19.0  1.038559160276  1.038559160276  0.583383616854  0.583383616854  0.000e+00
+
+  最大相对误差 = 0.000e+00  → 验收阈值 1e-9：PASS
+对应自动测试：tests/test_features_metrics_window_time.py::
+  test_20s_2s_window_gives_ten_a_peak_and_a_rms_points_at_window_centers（点数与偏移）
+  test_a_rms_per_window_matches_manual_segment_rms_within_1e_9（手工分段对比，含 1e-9 断言）
+  test_a_peak_per_window_matches_manual_segment_peak（峰值同口径）
+
+验收 2：参数表单里 a_Peak/a_RMS 出现「计算时长/步长」两项（AppTest 断言）
+真实命令：
+  .venv/bin/python -m pytest tests/test_page_metric_params.py -k "time_domain_metric_form" \
+      -p no:randomly -v -o addopts=""
+真实输出：
+  tests/test_page_metric_params.py::test_time_domain_metric_form_shows_window_and_step[a_Peak] PASSED [ 50%]
+  tests/test_page_metric_params.py::test_time_domain_metric_form_shows_window_and_step[a_RMS] PASSED [100%]
+  2 passed, 18 deselected in 1.27s
+断言内容：计算时长（s）= 2.0、计算步长（s）= 2.0，且时域指标表单不出现「窗函数」「带通」控件
+（没有把频域参数复制到时域指标上）。
+
+验收 3：峭度/峰峰值等时域指标同样按窗（若有）
+结论：无。src/lion_monitor/constants.py::METRIC_UNITS 只有 v_RMS / a_Peak / a_RMS 三个内置指标，
+metric_def 清单里没有峭度、峰峰值、波形因子类指标（`grep -rn "峭度\|峰峰值\|波形因子" src app tests`
+无命中），本轮无可接对象，也未新增指标（超出本卡范围）。
+
+验收 4：全量 pytest 全绿（历史整段口径测试按新口径更新，并列明改动与理由）
+真实输出：743 passed in 55.15s（见 2.2）；ruff check / format 均通过。
+按新口径更新的历史测试（4 条）：
+ 1) tests/test_features_metrics_window.py::test_time_domain_metrics_stay_one_point_at_record_start
+    → 重命名为 test_time_domain_metrics_follow_the_same_window_plan
+    理由：该测试断言的正是本卡要废除的「整段 1 点、偏移 0」；新断言为 4 s / 2 s → 2 点、偏移 1.0/3.0。
+ 2) tests/test_features_pipeline_window.py::test_time_domain_metric_still_one_row_at_batch_start
+    → 重命名为 test_time_domain_metric_also_writes_ten_window_points
+    理由：落库侧同一口径；metrics_written 11 → 20，a_Peak 由 1 行改为 10 行（computed_at = 窗中心）。
+ 3) tests/test_params_schema.py::test_schema_defaults_returns_plain_dict
+    理由：schema 新增 window_s/step_s，a_Peak 的派生默认值字典随之变化（断言补两项）。
+ 4) tests/test_params.py::test_default_params_for_builtin_codes
+    理由：同上（a_Peak / a_RMS 的 PARAM_DEFAULTS 补 window_s/step_s）。
+未改动任何与切窗口径无关的断言；compute_metrics 单值接口的回归金标准
+（tests/test_features_metrics_params.py）一行未动，仍逐位通过。
+
+四、行为前后对比
+--------------------------------------------------------------
+                       改造前（整段）                     改造后（2 s 窗 / 2 s 步长，20 s 记录）
+a_Peak 每通道           1 行，computed_at = 采集起始        10 行，computed_at = 采集起始 + 1,3,...,19 s
+a_RMS 每通道            1 行，同上                          10 行，同上
+v_RMS 每通道            10 行（S4W-1 已逐窗）              10 行（不变）
+metrics_written（1 通道 2 指标）  2                          20
+参数表单（a_Peak）      只有「去直流」（高级折叠）          基本参数多「计算时长（s）」「计算步长（s）」，默认 2.0/2.0
+短记录（1 s < 1 窗）    a_Peak 偏移 0                       偏移 0.5 s（整段当 1 窗，取段中心，与频域一致）
+历史值                  -                                   原样保留（不迁移、不改写）
+
+五、未做项
+--------------------------------------------------------------
+1. 峭度 / 峰峰值 / 波形因子：METRIC_UNITS 里没有这些指标定义，本卡不新增指标（见验收 3）。
+2. 时域指标的 window_fn：按设计不消费（加窗会压低 a_Peak），已在方案文档 §14.2 记录。
+3. 24 万行端到端 bench_pages.py 未重跑：查询侧与索引未改，本轮只增加行数（20 s 单批 48 行 → 66 行
+   量级），按 S4W-1 口径不重复跑；如需要可另行安排。

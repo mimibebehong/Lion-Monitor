@@ -1,0 +1,104 @@
+{
+  "default_window_fn": "rect",
+  "band_hz": [
+    10.0,
+    1000.0
+  ],
+  "fs_hz": 32000.0,
+  "amplitude_g": 0.8,
+  "sine_theory": [
+    {
+      "freq_hz": 10.0,
+      "theory_mm_s": 88.2909,
+      "hanning_mm_s": 79.1864,
+      "hanning_err_pct": -10.312,
+      "rect_mm_s": 88.2909,
+      "rect_err_pct": -0.0,
+      "rect_vs_hanning_pct": 11.498
+    },
+    {
+      "freq_hz": 20.0,
+      "theory_mm_s": 44.1454,
+      "hanning_mm_s": 44.2008,
+      "hanning_err_pct": 0.125,
+      "rect_mm_s": 44.1454,
+      "rect_err_pct": 0.0,
+      "rect_vs_hanning_pct": -0.125
+    },
+    {
+      "freq_hz": 50.0,
+      "theory_mm_s": 17.6582,
+      "hanning_mm_s": 17.6617,
+      "hanning_err_pct": 0.02,
+      "rect_mm_s": 17.6582,
+      "rect_err_pct": -0.0,
+      "rect_vs_hanning_pct": -0.02
+    },
+    {
+      "freq_hz": 100.0,
+      "theory_mm_s": 8.8291,
+      "hanning_mm_s": 8.8295,
+      "hanning_err_pct": 0.005,
+      "rect_mm_s": 8.8291,
+      "rect_err_pct": -0.0,
+      "rect_vs_hanning_pct": -0.005
+    }
+  ],
+  "sweep": {
+    "in_band_points": 99,
+    "rect_max_abs_err_pct": 0.0,
+    "hanning_max_abs_err_pct": 10.312,
+    "worst_in_band_rect": {
+      "freq_hz": 10.0,
+      "in_band": true,
+      "theory_mm_s": 88.2909,
+      "rect_err_pct": -0.0,
+      "hanning_err_pct": -10.312
+    },
+    "worst_in_band_hanning": {
+      "freq_hz": 10.0,
+      "in_band": true,
+      "theory_mm_s": 88.2909,
+      "rect_err_pct": -0.0,
+      "hanning_err_pct": -10.312
+    },
+    "below_band_rect_pct_of_theory": {
+      "5Hz": -100.0
+    }
+  },
+  "broadband_noise": {
+    "note": "0.5g 宽带噪声 + 0.05g@10Hz + 0.3g@300Hz",
+    "rect_mm_s": 6.4092,
+    "hanning_mm_s": 6.0266,
+    "diff_pct": 6.349,
+    "abs_diff_pct": 6.349
+  },
+  "noise_window_length_stability": {
+    "note": "同一段 8 s 宽带噪声，按 2 s / 8 s 窗各算一遍取均值",
+    "rect_2s_mm_s": 5.9625,
+    "rect_8s_mm_s": 5.8898,
+    "rect_2s_vs_8s_pct": 1.234,
+    "hanning_2s_mm_s": 5.6177,
+    "hanning_8s_mm_s": 5.2529,
+    "hanning_2s_vs_8s_pct": 6.944,
+    "hanning_8s_vs_rect_8s_pct": -10.813
+  },
+  "leakage_control": {
+    "note": "同一段 8 s 信号的 2 s 窗均值；差异只可能来自窗型",
+    "E1_白噪+300Hz_无10Hz分量": {
+      "rect_mm_s": 2.2631,
+      "hanning_mm_s": 2.2983,
+      "rect_vs_hanning_pct": -1.531
+    },
+    "E1_白噪+300Hz+10Hz分量": {
+      "rect_mm_s": 5.9625,
+      "hanning_mm_s": 5.6177,
+      "rect_vs_hanning_pct": 6.137
+    },
+    "E2_带限噪声_20-900Hz_无带边缘分量": {
+      "rect_mm_s": 3.5653,
+      "hanning_mm_s": 3.582,
+      "rect_vs_hanning_pct": -0.465
+    }
+  }
+}

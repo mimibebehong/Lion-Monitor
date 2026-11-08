@@ -1,0 +1,28 @@
+# Lion-Monitor Windows 便携包依赖（§11 三级策略的 L0：预装进安装包）
+#
+# 装法（构建机联网时）：
+#   runtime\python.exe -m pip install --no-cache-dir --only-binary=:all: -r requirements-win.txt
+# 装完立刻锁定实际版本：
+#   runtime\python.exe -m pip freeze > deps.lock
+#
+# 纪律（§11）：
+#   - 正式产线只走这份清单（改这里 → 重新发版）；现场临时装包只允许用离线 wheel 试算
+#   - 版本用范围而不是死锁，实际版本由 deps.lock 记录；两处不一致时以 deps.lock 为准
+#   - 全部必须是 Windows 轮子（cp311 + win_amd64 或纯 Python），否则现场装不上
+
+# ---- 核心（与 pyproject.toml 的 dependencies 一致，缺任何一个界面起不来）----
+numpy>=2.0
+pandas>=2.1
+pydantic>=2.5
+pyyaml>=6.0
+scipy>=1.11
+matplotlib>=3.8
+streamlit>=1.36
+plotly>=5.20
+sqlalchemy>=2.0
+
+# ---- 扩展算法（§12 马哥要求全预装；缺了只有用到对应算法的指标会报错）----
+PyWavelets>=1.4
+statsmodels>=0.14
+scikit-learn>=1.3
+numba>=0.59

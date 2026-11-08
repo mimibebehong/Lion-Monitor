@@ -1,0 +1,79 @@
+=== 1) 选中通道节点 CH1（有转速门控的指标尚未设置转速）
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 默认值', '高级参数（带宽/算法）· 使用默认值', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 未设置', 0.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 1000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）\u3000🔒 需先设置转速']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['保存转速', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '保存参数', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: []
+
+=== 2) 填本节点转速 1480 rpm（未保存，先看下拉是否解锁）
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 默认值', '高级参数（带宽/算法）· 使用默认值', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 未设置', 1480.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 1000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）\u3000🔒 需先设置转速']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['保存转速', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '保存参数', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: []
+
+=== 3) 保存转速后：🔒 消失
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 默认值', '高级参数（带宽/算法）· 使用默认值', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 本节点手填', 1480.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 1000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['保存转速', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '保存参数', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: []
+
+=== 4) 改带通上限 1000 → 2000 Hz：高级标题变「已修改 1 项」
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 已修改 1 项 🔶', '高级参数 · 已修改 1 项 🔶', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 本节点手填', 1480.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 2000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['保存转速', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '保存参数', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: []
+
+=== 5) 点保存参数：先弹「将影响 1 个数据集，需重算」
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 已修改 1 项 🔶', '高级参数 · 已修改 1 项 🔶', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 本节点手填', 1480.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 2000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '确认保存（需重算）', '取消', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: ['将影响 1 个数据集，需重算：带宽参数改动后历史指标值需按新带宽重算']
+
+=== 6) 确认保存后
+exceptions: []
+tabs: ['节点属性', '监测指标', '子节点', '改名与删除']
+expanders: ['v_RMS（mm/s）· 已修改 1 项 🔶', '高级参数 · 已修改 1 项 🔶', '＋ 新增监测指标']
+number_input: [('本节点转速（rpm）· 本节点手填', 1480.0), ('计算时长（s）', 2.0), ('计算步长（s）', 2.0), ('带通下限（Hz）', 10.0), ('带通上限（Hz）', 2000.0)]
+selectbox: [('窗函数', 'hanning', ['hanning', 'hamming', 'blackman', 'kaiser', 'rect']), ('选择指标（来自台账）', 'a_Peak（g）', ['a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）']), ('指标（来自台账）', 'v_RMS（mm/s）', ['v_RMS（mm/s）', 'a_Peak（g）', 'a_RMS（g）', 'BPFO_1X（mm/s）'])]
+checkbox: [('确认用内置示例树替换', False), ('呈现 卷绕产线', True), ('去直流', True), ('固化全部参数（此后不再跟随指标定义）', False), ('确认删除该节点及其子树', False)]
+buttons: ['保存转速', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '恢复默认', '保存参数', '添加指标', '添加到树上', '改名', '删除节点']
+errors: []
+warnings: []
+
+=== 7) 回库核对已保存的覆盖项
+v_RMS: params={'band_high': 2000.0} locked=False
+
+=== 8) 指标配置页（可改默认值/参数声明）
+exceptions: []
+tabs: []
+expanders: []
+number_input: []
+selectbox: []
+checkbox: []
+buttons: ['补齐内置指标（v_RMS / a_Peak / a_RMS）', '创建指标']
+errors: []
+warnings: []

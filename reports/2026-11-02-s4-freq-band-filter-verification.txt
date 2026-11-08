@@ -1,0 +1,143 @@
+S4D 验收报告：带通改频域滤波（替代 butter 阶数设置）
+=====================================================
+
+项目：/home/administrator/workspace/projects/Lion-Monitor
+日期：2026-11-02
+任务：kanban t_168941b3（S4D，任务书 docs/kanban/bodies/s4d_brief.md）
+基线：5c2f500（全量 pytest 752 passed）
+说明：会话开始时工作区已带两处**非本任务**的未提交改动（src/lion_monitor/viz/spectrum_plot.py、
+      tests/test_viz_spectrum.py，标记线分层相关，+8 条用例），本任务未触碰；该批改动在本卡执行
+      期间由 S4W-7 自行提交为 6c9920e，所以本卡全量 pytest 的条数是 766 = 752 + 新增 6 + 那 8 条。
+      详见第七节。
+
+一、改动清单（提交 sha 与文件）
+-------------------------------------------------------------
+bfd37fc  fix(metrics): 带通改频域滤波，删掉 4 阶 butter（S4D）
+  src/lion_monitor/features/metrics.py
+      _band_filter（L71-92）：butter(4, ...) + sosfiltfilt → np.fft.rfft → 带外频点置零
+      （freqs < band_low 或 freqs > band_high）→ np.fft.irfft(n=x.size)；
+      effective_params 夹紧（band_high ≤ 0.95×fs/2、band_low ≥ 2 Hz/窗长抬高）与
+      样本量 64 下限原样保留；_velocity_rms 切首尾 0.5 s 保留、注释改述为循环卷积接缝。
+      模块头删掉 scipy.signal 依赖（现在只用 numpy）。
+  tests/test_features_metrics_freq_filter.py（新增 6 条，见第二节）
+
+3fb47bc  test(metrics): 按频域带通口径更新金标准与边距用例（S4D）
+  tests/test_features_metrics_params.py   三个 v_RMS 金标准重算 + 4 kHz 夹具修正
+  tests/test_features_waveform.py         速度峰值容差收紧 10% → 0.1%；边距用例改断言
+
+（本报告 + docs/plans/2026-10-28 方案 §10.1/§10.2 + docs/plans/2026-10-31 §15 +
+  params.py 页面 help 随后一次 docs(params) 提交）
+
+二、TDD 过程
+-------------------------------------------------------------
+2.1 RED（先把 metrics.py 换回基线 5c2f500 版本，再跑新测试）
+命令：
+  git show 5c2f500:src/lion_monitor/features/metrics.py > $S/old_metrics.py
+  cp $S/old_metrics.py src/lion_monitor/features/metrics.py
+  .venv/bin/python -m pytest tests/test_features_metrics_freq_filter.py
+  （跑完 git checkout -- src/lion_monitor/features/metrics.py 恢复实现）
+真实输出（关键行）：
+E       AssertionError: assert array([ 0.189...hape=(32000,)) == approx([1.665...36 ± 1.9e-14])
+tests/test_features_metrics_freq_filter.py:51: AssertionError
+E       AssertionError: assert not True
+tests/test_features_metrics_freq_filter.py:56: AssertionError
+E       AssertionError: assert np.float64(0.4709842632786664) < 1e-06
+tests/test_features_metrics_freq_filter.py:69: AssertionError
+E       AssertionError: 带外残留 -14.55 dB，未压到 -40 dB 以下
+E       assert np.float64(-14.551749897856812) < -40.0
+tests/test_features_metrics_freq_filter.py:87: AssertionError
+FAILED tests/test_features_metrics_freq_filter.py::test_band_filter_matches_manual_rfft_band_zeroing
+FAILED tests/test_features_metrics_freq_filter.py::test_metrics_module_no_longer_uses_iir_filter_design
+FAILED tests/test_features_metrics_freq_filter.py::test_filter_is_zero_phase_and_keeps_the_in_band_tone_intact
+FAILED tests/test_features_metrics_freq_filter.py::test_out_of_band_tone_suppressed_below_minus_40_db
+4 failed, 2 passed in 1.70s
+
+2.2 GREEN（恢复实现后同一条命令）
+  .venv/bin/python -m pytest tests/test_features_metrics_freq_filter.py
+  -> 6 passed
+新增 6 条覆盖：与手工 rfft 置零逐位一致（rel 1e-12）、计算层不再引入 butter/sosfiltfilt、
+单频带内零相位（逐点还原 + 互相关 0 位移 + 峰值样本不动）、1200 Hz 带外残留 < -40 dB、
+145 Hz v_RMS = 理论值（< 2%）、velocity_series 长度与有限性。
+
+2.3 全量回归（新实现）
+  .venv/bin/python -m pytest
+  -> 766 passed in 106.71s (0:01:46)
+  .venv/bin/ruff check src app tests
+  -> All checks passed!
+  .venv/bin/ruff format --check src app tests
+  -> 165 files already formatted
+
+三、验收（逐条，真实数值）
+-------------------------------------------------------------
+运行脚本（放在 scratch，不进仓库；只读调用生产代码）：
+  .venv/bin/python /home/administrator/.hermes/profiles/coding-copilot/cache/scratch/s4d_acceptance.py
+真实输出：
+[1] 145 Hz / 0.8 gpk / fs=32000 / 20 s -> v_RMS vs 理论值
+    v_RMS  = 6.089025518512 mm/s
+    理论值 = 6.089025518512 mm/s  (0.8/sqrt2 * 9806.65 / (2*pi*145))
+    相对误差 = 2.917e-16   验收线 < 2e-2 -> PASS
+[2] 零相位：100 Hz + 500 Hz 双音过 10-300 Hz 带通
+    与 100 Hz 分量逐点最大偏差 = 8.712e-14 g
+    互相关位移 = 0 样本；峰值样本 index 原始 80 / 滤波后 80
+    -> PASS
+[3] 带外压制：1200 Hz 单音过 10-1000 Hz 带通
+    残差 = -267.5 dB   验收线 < -40 dB -> PASS
+[4] velocity_series 长度 / 有限性
+    输入 64000 点 / 输出 64000 点；all finite = True
+    RMS = 4.618568 mm/s
+    -> PASS
+[附加] 硬截断（无过渡带）的频率选择性 + 接缝振铃
+        990 Hz 增益 = 1.0000
+       1000 Hz 增益 = 1.0000
+       1010 Hz 增益 = 0.0000
+       1100 Hz 增益 = 0.0000
+    145.3 Hz（非整周期）2 s：首尾逐点最大偏差 2.971e-01 g
+      切首尾 0.5 s 后 1.404e-03 g；RMS 比值 0.999953
+
+
+四、为什么改这些历史测试（逐条理由）
+-------------------------------------------------------------
+1. test_features_metrics_params.py::test_default_call_matches_pre_change_golden_values
+   v_RMS 10.405547108507731 → 10.405592400426606（差 4.3e-5）。rel=1e-12 的容差没动，只换期望值。
+2. ...::test_default_call_short_record_matches_golden_values
+   9.203996635063536 → 9.196965626918837；新值 = 0.5/√2·9806.65/(2π·60) 的理论值，旧值比理论高
+   0.08%（butter 在 10 Hz 下边沿略削通带增益 + 暂态）。
+3. ...::test_default_call_low_sample_rate_matches_golden_values（**夹具本身有 bug**）
+   旧用例的信号按 32 kHz 采样生成、却按 fs=4 kHz 计算，60 Hz 实际落在 7.5 Hz（带通 10 Hz 之外），
+   旧金标准 0.5606 只是 butter 泄漏残差。改为按 4 kHz 采样生成同一物理信号，期望值 9.19696562691884
+   （= 理论值），并补一条「与 32 kHz 结果相对差 < 1e-9」的断言。容差仍是 rel=1e-12。
+4. tests/test_features_waveform.py::test_velocity_unit_matches_v_rms
+   峰值容差 rel=0.10 → rel=1e-3（**收紧**，不是放宽）：实测中点峰值 3.12155 = 理论值
+   0.2·9806.65/(2π·100)，改造前 butter 给 3.30（+6%）。
+5. test_velocity_padding_really_removes_edge_transient →
+   test_velocity_padding_is_belt_and_braces_after_frequency_filtering
+   旧断言「不读边距必须偏 > 5 mm/s」断言的正是被删掉的 IIR 暂态；S4D 后 2 s 整周期区间里
+   读不读边距结果一致（实测差 7e-14 mm/s），改为断言两条路径都回到整段基准（< 1 mm/s）。
+
+五、口径冲突与取舍（须知晓）
+-------------------------------------------------------------
+1. **切首尾 0.5 s 保留，但理由变了**：频域置零是循环卷积，非整周期段的段首尾接缝有 Gibbs
+   振铃（145.3 Hz / 2 s：首尾逐点偏差 0.297 g），切 0.5 s 后 1.4e-3 g、RMS 比值 0.99995。
+   原注释说的「10 Hz 低端 IIR 振铃」已不成立，注释与文档均已改述。
+   **未把 0.5 s 改成自适应窗长**（会动 S4W-1/2 已验收的量级口径），留给需要时另开卡。
+2. **波形页 VELOCITY_EDGE_PAD_S 降级为双保险**：整周期区间里它是 no-op，非整周期区间仍压接缝，
+   故机制与默认值 0.5 s 都不动，只把测试断言改成「两条路径一致」。
+3. **包络谱没有跟随**：features/envelope.py::bandpass_filter 是独立实现（阶数 2~10 可调、
+   0~fs/2 = 不滤波的语义），任务书原文是「共用同一函数才自动跟随」。改成频域要同时动
+   UI 的阶数参数与 6 处包络测试，属另一页签口径 —— 本卡按指令不动，若马哥要去掉包络谱的
+   阶数设置，另开一张卡。
+4. **硬截断不做过渡带**：任务书允许在明显振铃时加 1~2 bin 余弦过渡。实测 1000 Hz 增益 1.0000、
+   1010 Hz 0.0000、1200 Hz 单音残留 -267.5 dB，通带内整数周期信号逐点还原误差 8.7e-14，
+   无明显振铃，故按默认硬截断，不加过渡带。
+
+六、未做项
+-------------------------------------------------------------
+- E1 有效性业务判据、E3 阈值推送、设备使用信息字段：任务书明确不做。
+- 包络谱带通：见第五节第 3 条（独立实现，非本卡范围）。
+- 过渡带：见第五节第 4 条（数值支撑不需要）。
+
+七、git 状态
+-------------------------------------------------------------
+会话开始时工作区带着两处非本任务改动（viz 标记线分层，+8 条用例）。执行期间 S4W-7 把它们
+提交为 6c9920e（仅 src/lion_monitor/viz/spectrum_plot.py + tests/test_viz_spectrum.py，本卡
+没有读写、也没有提交这两个文件）。本卡三个提交落库后 `git status --porcelain` 输出为空。

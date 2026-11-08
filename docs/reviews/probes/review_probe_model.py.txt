@@ -1,0 +1,470 @@
+"""总体复查·只读探测（数据模型 / 迁移 / 唯一约束 / 重复导入 / 旧模型并存）。
+
+只读：不改 src/ 与 app/ 任何代码；所有写入都落在临时库
+（~/workspace/temp/<日期>/review-*.db）或 data/lion.db 的**副本**上。
+
+运行：
+    cd ~/workspace/projects/Lion-Monitor && .venv/bin/python scripts/review_probe_model.py
+证据输出：reports/2026-10-31-review-model.txt（同时打印到 stdout）
+"""
+
+from __future__ import annotations
+
+import shutil
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from sqlalchemy import text
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from lion_monitor.store import (  # noqa: E402
+    datasets,
+    metric_assign,
+    metric_def,
+    object_registry,
+    objects,
+    tasks,
+    tree,
+)
+from lion_monitor.store.db import (  # noqa: E402
+    init_db,
+    make_engine,
+    make_session_factory,
+)
+
+STAMP = datetime.now().strftime("%Y-%m-%d")
+WORK = Path.home() / "workspace" / "temp" / STAMP
+OUT = ROOT / "reports" / "2026-10-31-review-model.txt"
+DATA = Path("/mnt/d/hermes_wp/Project/锂电产线/envision/data/四通道保存")
+REAL_DB = ROOT / "data" / "lion.db"
+
+lines: list[str] = []
+
+
+def say(text: str = "") -> None:
+    print(text)
+    lines.append(text)
+
+
+def head(title: str) -> None:
+    say("")
+    say("=" * 92)
+    say(title)
+    say("=" * 92)
+
+
+def fresh(name: str):
+    WORK.mkdir(parents=True, exist_ok=True)
+    path = WORK / name
+    if path.exists():
+        path.unlink()
+    engine = make_engine(path)
+    init_db(engine)
+    return path, engine, make_session_factory(engine)()
+
+
+def build_tree(session, task_name: str, channels=("CH1", "CH2", "CH3", "CH4")):
+    task = tasks.create_task(session, name=task_name, operator="review")
+    obj = object_registry.create_object(session, task.id, "隔膜过辊轴承", "轴承", part="隔膜过辊")
+    metric_def.seed_defaults(session, task.id)
+    defs = {row.code: row for row in metric_def.list_metrics(session, task.id)}
+    root = tree.root_node(session, task.id)
+    device = tree.create_node(session, task.id, "device", "卷绕产线", parent_id=root.id, attrs={})
+    comp = tree.create_node(
+        session,
+        task.id,
+        "component",
+        "隔膜过辊轴承",
+        parent_id=device.id,
+        attrs={"类型": "轴承"},
+        ref_id=obj.id,
+    )
+    ch_nodes = {}
+    for code in channels:
+        ch = tree.create_node(session, task.id, "channel", code, parent_id=comp.id, attrs={})
+        ch_nodes[code] = ch.id
+        for metric in ("a_Peak", "a_RMS", "v_RMS"):
+            tree.create_node(
+                session,
+                task.id,
+                "metric",
+                metric,
+                parent_id=ch.id,
+                attrs={"code": metric, "单位": defs[metric].unit},
+                ref_id=defs[metric].id,
+            )
+            metric_assign.assign_metric(session, task.id, ch.id, metric)
+    return task, ch_nodes
+
+
+# ---------------------------------------------------------------- 1. 结构与索引
+def probe_schema(path: Path, engine) -> None:
+    head("[P1] 表结构 / 索引实况（PRAGMA）")
+    with engine.connect() as conn:
+        tables = [
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )
+        ]
+        say(f"　库：{path}")
+        say(f"　表（{len(tables)}）：{' / '.join(tables)}")
+        for table in (
+            "metric_value",
+            "metric_assign",
+            "metric_limit",
+            "metric_def",
+            "dataset",
+            "channel",
+        ):
+            idx = conn.exec_driver_sql(f"PRAGMA index_list({table})").fetchall()
+            names = []
+            for row in idx:
+                name, unique = row[1], row[2]
+                cols = [c[2] for c in conn.exec_driver_sql(f"PRAGMA index_info({name})")]
+                names.append(f"{name}({'/'.join(cols)}){' UNIQUE' if unique else ''}")
+            say(f"　{table:<14} 索引 {len(names)} 个：{'；'.join(names) or '（无）'}")
+        sql = conn.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='metric_value'"
+        ).scalar()
+        say("　metric_value 建表 SQL：")
+        for chunk in str(sql).split("\n"):
+            say(f"　　{chunk.strip()}")
+
+
+# ---------------------------------------------------------------- 2. 唯一约束（deleted_at NULL）
+def probe_null_unique(engine) -> None:
+    head("[P2] 唯一约束在 deleted_at=NULL 下是否真的生效（SQLite 的 NULL 互不相等）")
+    with engine.begin() as conn:
+        node_id = conn.exec_driver_sql(
+            "SELECT id FROM task_node WHERE node_type='channel' LIMIT 1"
+        ).scalar()
+        task_id = conn.exec_driver_sql(
+            "SELECT task_id FROM task_node WHERE id=?", (node_id,)
+        ).scalar()
+        accepted = 0
+        for attempt in range(2):
+            try:
+                conn.exec_driver_sql(
+                    "INSERT INTO metric_limit (task_id,node_id,metric_code,warn,alert,direction,enabled,updated_at,deleted_at)"
+                    " VALUES (?,?,?,?,?,?,?,datetime('now'),NULL)",
+                    (task_id, node_id, "DUP_TEST", 1.0, 2.0, ">", 1),
+                )
+                accepted += 1
+            except Exception as exc:  # noqa: BLE001 - 探测：看约束是否拦住
+                say(f"　第 {attempt + 1} 次插入被拦：{type(exc).__name__}: {exc}")
+        count = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM metric_limit WHERE node_id=? AND metric_code='DUP_TEST'",
+            (node_id,),
+        ).scalar()
+        dup_assign = 0
+        for attempt in range(2):
+            try:
+                conn.exec_driver_sql(
+                    "INSERT INTO metric_assign (task_id,node_id,metric_code,unit,params_json,params_locked,enabled,deleted_at)"
+                    " VALUES (?,?,?,?,?,?,?,NULL)",
+                    (task_id, node_id, "DUP_TEST2", "g", "{}", 0, 1),
+                )
+                dup_assign += 1
+            except Exception as exc:  # noqa: BLE001
+                say(f"　metric_assign 第 {attempt + 1} 次插入被拦：{type(exc).__name__}: {exc}")
+    say(
+        f"　同一 (node_id, metric_code) 连续插入 2 次：metric_limit 成功 {accepted}/2 次，表内现有 {count} 行"
+    )
+    say(f"　同一 (node_id, metric_code) 连续插入 2 次：metric_assign 成功 {dup_assign}/2 次")
+    say(
+        "　→ 判定：uq_metric_limit / uq_metric_assign 含 deleted_at 列，NULL 在 SQLite 唯一索引里互不相等，"
+        "约束对「有效行」实际上不生效，唯一性只靠代码里的 exists 查询。"
+    )
+
+    sess = make_session_factory(engine)()
+    node = sess.execute(text("SELECT id FROM task_node WHERE node_type='channel' LIMIT 1")).scalar()
+    rows = [
+        r
+        for r in metric_assign.list_assignments(
+            sess,
+            sess.execute(text("SELECT task_id FROM task_node WHERE id=:i"), {"i": node}).scalar(),
+        )
+        if r.code == "DUP_TEST2"
+    ]
+    say(
+        f"　重复 metric_assign 行在 list_assignments 里出现 {len(rows)} 次；"
+        f"pipeline.metric_jobs 用 {{(node_id, code): row}} 字典，重复行会静默取最后一条"
+    )
+    sess.close()
+
+
+# ---------------------------------------------------------------- 3. 查询计划
+def probe_query_plan(engine) -> None:
+    head("[P3] 趋势查询 / 最新值查询的执行计划（是否吃到索引）")
+    queries = {
+        "趋势（list_values：任务+通道号+指标，按时间排序）": (
+            "SELECT mv.* FROM metric_value mv JOIN channel ch ON mv.channel_id=ch.id "
+            "JOIN dataset d ON ch.dataset_id=d.id WHERE d.task_id=1 AND ch.code='CH2' "
+            "AND mv.code='v_RMS' AND d.deleted_at IS NULL AND ch.deleted_at IS NULL "
+            "AND mv.deleted_at IS NULL ORDER BY mv.computed_at, mv.id"
+        ),
+        "最新值（健康评级：同通道号全部指标值）": (
+            "SELECT mv.* FROM metric_value mv JOIN channel ch ON mv.channel_id=ch.id "
+            "JOIN dataset d ON ch.dataset_id=d.id WHERE d.task_id=1 AND ch.code='CH2' "
+            "AND mv.deleted_at IS NULL ORDER BY mv.computed_at, mv.id"
+        ),
+        "按节点过滤（node_id 单列条件）": (
+            "SELECT * FROM metric_value WHERE node_id=3 AND code='v_RMS' ORDER BY computed_at"
+        ),
+    }
+    with engine.connect() as conn:
+        for label, sql in queries.items():
+            plan = conn.exec_driver_sql("EXPLAIN QUERY PLAN " + sql).fetchall()
+            say(f"　{label}：")
+            for row in plan:
+                say(f"　　{row[-1]}")
+
+
+# ---------------------------------------------------------------- 4. 迁移幂等与老行兜底
+def probe_migration() -> None:
+    head("[P4] 迁移幂等性 + 历史行 node_id=NULL 的读取兜底（data/lion.db 副本）")
+    if not REAL_DB.exists():
+        say("　data/lion.db 不存在，跳过")
+        return
+    WORK.mkdir(parents=True, exist_ok=True)
+    copy = WORK / "review-migrate.db"
+    shutil.copy2(REAL_DB, copy)
+    engine = make_engine(copy)
+
+    def counts() -> dict[str, int]:
+        with engine.connect() as conn:
+            out = {}
+            for table in (
+                "metric_value",
+                "metric_limit",
+                "metric_assign",
+                "task_node",
+                "dataset",
+                "channel",
+            ):
+                out[table] = conn.exec_driver_sql(f"SELECT COUNT(*) FROM {table}").scalar()
+            cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(metric_value)")}
+            if "node_id" in cols:
+                out["mv_node_null"] = conn.exec_driver_sql(
+                    "SELECT COUNT(*) FROM metric_value WHERE node_id IS NULL"
+                ).scalar()
+                out["mv_node_set"] = conn.exec_driver_sql(
+                    "SELECT COUNT(*) FROM metric_value WHERE node_id IS NOT NULL"
+                ).scalar()
+            else:
+                out["mv_node_null"] = -1  # -1 = 该库还没有 node_id 列（未迁移）
+                out["mv_node_set"] = -1
+            return out
+
+    with engine.connect() as conn:
+        pre_sql = conn.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='metric_value'"
+        ).scalar()
+        pre_idx = [tuple(r) for r in conn.exec_driver_sql("PRAGMA index_list(metric_value)")]
+    say("　【迁移前】metric_value 建表 SQL：")
+    for chunk in str(pre_sql).split("\n"):
+        say(f"　　{chunk.strip()}")
+    say(f"　【迁移前】索引：{pre_idx}")
+    before = counts()
+    say(f"　副本迁移前：{before}")
+    for round_no in (1, 2, 3):
+        init_db(engine)
+        say(f"　第 {round_no} 次 init_db 后：{counts()}")
+    after = counts()
+    same = all(
+        before[k] == after[k]
+        for k in (
+            "metric_value",
+            "metric_limit",
+            "metric_assign",
+            "task_node",
+            "dataset",
+            "channel",
+        )
+    )
+    say(f"　迁移前后各表行数一致：{same}（迁移前 metric_value 无 node_id 列 → -1 表示不适用）")
+    with engine.connect() as conn:
+        post_sql = conn.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='metric_value'"
+        ).scalar()
+    say(f"　【迁移后】含新唯一约束：{'uq_metric_value_node_point' in str(post_sql)}")
+
+    sess = make_session_factory(engine)()
+    task_ids = [r.id for r in tasks.list_tasks(sess)]
+    say(f"　任务：{task_ids}")
+    legacy_hits = 0
+    for task_id in task_ids:
+        with engine.connect() as conn:
+            codes = [
+                r[0]
+                for r in conn.exec_driver_sql(
+                    "SELECT DISTINCT ch.code FROM metric_value mv JOIN channel ch ON mv.channel_id=ch.id "
+                    "WHERE mv.node_id IS NULL LIMIT 3"
+                )
+            ]
+        for code in codes:
+            from lion_monitor.store import metrics as metric_store
+
+            rows = metric_store.list_values(sess, task_id, code)
+            legacy_hits += sum(1 for row in rows if row.node_id is None)
+    say(
+        f"　按通道号读到的历史行（node_id IS NULL）共 {legacy_hits} 行：读取路径不报错、返回 node_id=None"
+    )
+    sess.close()
+
+
+def probe_interrupted_rebuild() -> None:
+    head("[P5] 重建迁移中途失败的恢复分支（模拟 metric_value_old 残留）")
+    path, engine, sess = fresh("review-interrupt.db")
+    task, ch = build_tree(sess, "中断恢复")
+    ds_row = datasets.create_dataset(sess, task.id, "b1", "/tmp/x", "2026-10-31 10:00:00", "有效")
+    f_row = datasets.add_file(sess, ds_row.id, "/tmp/x/CH1.dat", "CH1", 32000.0, 640000)
+    ds, ch_id = ds_row.id, f_row.id
+    for i in range(5):
+        sess.execute(
+            text(
+                "INSERT INTO metric_value (channel_id,code,value,unit,level,computed_at,params_hash,rpm_source,stale) "
+                "VALUES (:c,'v_RMS',:v,'mm/s','unset',:t,'abc','',0)"
+            ),
+            {"c": ch_id, "v": 1.0 + i, "t": f"2026-10-31 10:0{i}:00"},
+        )
+    sess.commit()
+    say(f"　造 5 行指标值，channel_id={ch_id}")
+    # 模拟「RENAME 成功、新表未建」的中断现场
+    with engine.begin() as conn:
+        conn.exec_driver_sql("ALTER TABLE metric_value RENAME TO metric_value_old")
+        for name in [
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='metric_value_old'"
+            )
+        ]:
+            if not name.startswith("sqlite_autoindex"):
+                conn.exec_driver_sql(f"DROP INDEX IF EXISTS {name}")
+    init_db(engine)
+    with engine.connect() as conn:
+        total = conn.exec_driver_sql("SELECT COUNT(*) FROM metric_value").scalar()
+        leftover = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name='metric_value_old'"
+        ).scalar()
+        nulls = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM metric_value WHERE node_id IS NULL"
+        ).scalar()
+    say(
+        f"　中断后 init_db：metric_value 行数 {total}（应为 5）、残留 _old 表 {leftover} 个、node_id 为空 {nulls} 行"
+    )
+    sess.close()
+
+
+# ---------------------------------------------------------------- 6. 数据集编号 / 重复导入
+def probe_dataset_code_collision() -> None:
+    head("[P6] 同一天第二个任务导入同一目录：数据集编号是否撞 unique(code)")
+    path, engine, sess = fresh("review-code.db")
+    task_a, ch_a = build_tree(sess, "任务A")
+    task_b, ch_b = build_tree(sess, "任务B")
+    say(f"　任务 A={task_a.id}({task_a.code})　任务 B={task_b.id}({task_b.code})")
+    sub = next(p for p in sorted(DATA.iterdir()) if p.is_dir())
+    try:
+        row = datasets.import_from_dir(sess, task_a.id, sub, name="A-batch")
+        say(f"　任务 A 导入成功：{row.code} @ {row.collected_at}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"　任务 A 导入失败：{type(exc).__name__}: {str(exc).splitlines()[0]}")
+    try:
+        row_b = datasets.import_from_dir(sess, task_b.id, sub, name="B-batch")
+        say(f"　任务 B 导入成功：{row_b.code} @ {row_b.collected_at}")
+    except Exception as exc:  # noqa: BLE001
+        sess.rollback()
+        say(f"　任务 B 导入失败：{type(exc).__name__}: {str(exc).splitlines()[0]}")
+    with engine.connect() as conn:
+        say(
+            f"　dataset 表现有：{[tuple(r) for r in conn.exec_driver_sql('SELECT id,task_id,code FROM dataset')]}"
+        )
+    sess.close()
+
+
+def probe_duplicate_import_path() -> None:
+    head("[P7] 同一目录用不同写法导入：是否被识别为同一批次")
+    path, engine, sess = fresh("review-dup.db")
+    task, ch = build_tree(sess, "重复导入")
+    sub = next(p for p in sorted(DATA.iterdir()) if p.is_dir())
+    import os
+
+    os.chdir(sub)
+    try:
+        first = datasets.import_from_dir(sess, task.id, ".", name="dot")
+        say(f"　相对路径 '.' 导入：{first.code}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"　相对路径 '.' 导入失败：{type(exc).__name__}: {exc}")
+        first = None
+    try:
+        second = datasets.import_from_dir(sess, task.id, sub, name="abs")
+        say(
+            f"　绝对路径导入：{second.code}（同 collected_at={second.collected_at == first.collected_at if first else '?'}）"
+        )
+    except Exception as exc:  # noqa: BLE001
+        say(f"　绝对路径导入失败：{type(exc).__name__}: {exc}")
+        second = None
+    os.chdir(ROOT)
+    say(f"　→ 数据集条数 {len(datasets.list_datasets(sess, task.id))}（幂等应为 1）")
+    with engine.connect() as conn:
+        say(
+            f"　库内 source_dir：{[r[0] for r in conn.exec_driver_sql('SELECT source_dir FROM dataset')]}"
+        )
+    sess.close()
+
+
+# ---------------------------------------------------------------- 8. 旧模型并存
+def probe_dual_model() -> None:
+    head("[P8] store/objects.py（读树节点）与 store/object_registry.py（读台账）是否漂移")
+    path, engine, sess = fresh("review-dual.db")
+    task = tasks.create_task(sess, name="双模型", operator="review")
+    obj = object_registry.create_object(sess, task.id, "只在台账里的对象", "轴承", part="X")
+    ledger_rows = object_registry.list_objects(sess, task.id)
+    legacy_rows = objects.list_objects(sess, task.id)
+    say(f"　台账（object_registry）对象数 {len(ledger_rows)}：{[r.name for r in ledger_rows]}")
+    say(
+        f"　旧模型（objects.list_objects，读 task_node）对象数 {len(legacy_rows)}：{[r.name for r in legacy_rows]}"
+    )
+    root = tree.root_node(sess, task.id)
+    device = tree.create_node(sess, task.id, "device", "线", parent_id=root.id, attrs={})
+    tree.create_node(
+        sess, task.id, "component", "只在树里的对象", parent_id=device.id, attrs={"类型": "电机"}
+    )
+    say("　树里补一个 component（不挂台账）后：")
+    say(
+        f"　　台账 {len(object_registry.list_objects(sess, task.id))} 条 / 旧模型 {len(objects.list_objects(sess, task.id))} 条"
+    )
+    say(
+        "　→ 阈值设置页（app/pages/thresholds.py:43）用 objects.list_objects 取「监测对象」，"
+        "监测对象页写的是 monitor_object 台账：两处口径不同，页面上看到的对象列表可以不一致。"
+    )
+    sess.close()
+
+
+def main() -> None:
+    head(f"Lion-Monitor 总体复查 · 数据模型探测　{datetime.now():%Y-%m-%d %H:%M:%S}")
+    say(f"　工程：{ROOT}")
+    say(f"　临时库目录：{WORK}")
+    path, engine, sess = fresh("review-schema.db")
+    build_tree(sess, "结构探测")
+    probe_schema(path, engine)
+    probe_null_unique(engine)
+    probe_query_plan(engine)
+    sess.close()
+    probe_migration()
+    probe_interrupted_rebuild()
+    probe_dataset_code_collision()
+    probe_duplicate_import_path()
+    probe_dual_model()
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n已写：{OUT}")
+
+
+if __name__ == "__main__":
+    main()
