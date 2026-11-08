@@ -1,5 +1,7 @@
 # Lion-Monitor · 锂电产线振动监测
 
+[![CI](https://github.com/mimibebehong/Lion-Monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/mimibebehong/Lion-Monitor/actions/workflows/ci.yml)
+
 面向锂电池产线的**离线振动监测与健康评估**工具：读取四通道采集的 `.dat` 波形，按健康树计算指标、对照阈值，提供趋势分析、健康评级，以及原始波形 / FFT 频谱 / 包络谱分析。界面基于 Streamlit，数据与计算全部在本机完成。
 
 ![工作台](screenshots/dashboard.png)
@@ -130,3 +132,5 @@ Lion-Monitor/
 - 单机、单用户使用，不含账号与权限体系。
 - 输入为已采集的振动文件；实时采集与 PLC / OPC-UA 接入不在当前版本范围内。
 - 默认端口 `8501`，监听 `0.0.0.0` 时局域网内可访问。
+
+参与开发前请先看 [CONTRIBUTING.md](CONTRIBUTING.md)。
