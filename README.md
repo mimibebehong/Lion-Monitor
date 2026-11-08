@@ -1,8 +1,8 @@
-# Lion-Monitor · 锂电产线振动监测
+# Lion-Monitor · 通用健康监测框架（PHM）
 
 [![CI](https://github.com/mimibebehong/Lion-Monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/mimibebehong/Lion-Monitor/actions/workflows/ci.yml)
 
-面向锂电池产线的**离线振动监测与健康评估**工具：读取四通道采集的 `.dat` 波形，按健康树计算指标、对照阈值，提供趋势分析、健康评级，以及原始波形 / FFT 频谱 / 包络谱分析。界面基于 Streamlit，数据与计算全部在本机完成。
+面向通用健康监测框架（PHM）的**健康评估**工具：读取四通道采集的 `.dat` 波形，按健康树计算指标、对照阈值，提供趋势分析、健康评级，以及原始波形 / FFT 频谱 / 包络谱分析。界面基于 Streamlit，数据与计算全部在本机完成。
 
 ![工作台](screenshots/dashboard.png)
 
