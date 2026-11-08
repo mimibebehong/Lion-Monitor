@@ -36,9 +36,9 @@ if errorlevel 1 (
   echo [%DATE% %TIME%] ERROR 注册服务失败 >> "%LOG%"
   exit /b 1
 )
-rem AppDirectory 已设成安装目录，这里用相对路径 app\main.py，避免安装路径带空格时
-rem 参数里的引号被 cmd/NSSM 吃掉导致服务起不来。
-"%NSSM%" set LionMonitor AppParameters "-m streamlit run app\main.py --server.address 0.0.0.0 --server.port %PORT% --server.headless true --server.runOnSave false --browser.gatherUsageStats false" >> "%LOG%" 2>&1
+rem AppDirectory 已设成安装目录，这里用相对路径 run.py + app\main.py，避免安装路径带空格时
+rem 参数里的引号被 cmd/NSSM 吃掉导致服务起不来。run.py 固定 Selector 事件循环。
+"%NSSM%" set LionMonitor AppParameters "run.py run app\main.py --server.address 0.0.0.0 --server.port %PORT% --server.headless true --server.runOnSave false --browser.gatherUsageStats false" >> "%LOG%" 2>&1
 
 "%NSSM%" set LionMonitor AppDirectory "%APPDIR%" >> "%LOG%" 2>&1
 "%NSSM%" set LionMonitor DisplayName "Lion-Monitor 锂电产线振动监测" >> "%LOG%" 2>&1

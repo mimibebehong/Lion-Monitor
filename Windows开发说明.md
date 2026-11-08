@@ -22,8 +22,8 @@
 :: 绿色包（推荐，和装完后的行为一致）
 dist\LionMonitor.exe
 
-:: 开发时直接跑源码（用便携运行时）
-dist\runtime\python.exe -m streamlit run app\main.py --server.port 8501
+:: 开发时直接跑源码（用便携运行时；run.py = Selector 事件循环 + 统一日志）
+dist\runtime\python.exe run.py run app\main.py --server.port 8501
 ```
 
 浏览器打开 `http://localhost:8501`。第二次双击 `LionMonitor.exe` 只会再开一个浏览器标签，
@@ -260,3 +260,31 @@ PDF 由 Windows 自带 Edge 的 headless 打印，不额外引入依赖；只想
 桌面生成 `LionMonitor-诊断-<日期>-<时间>.txt`，内含：系统信息、health/首页状态码、
 netstat + tasklist + `server.pid`、关键文件完整性、`config.toml`、`selfcheck.status`、
 6 个日志的末尾 400 行。示例见发布目录 `LionMonitor-诊断日志-示例-v0.1.1.txt`。
+
+### 9.5 v0.1.2 修复：Windows accept 断链（2026-11-08）
+
+现场日志 `logs\server.log` 里出现：
+
+```text
+Accept failed on a socket
+OSError: [WinError 64] 指定的网络名不再可用。
+```
+
+根因不在 Streamlit，而在 CPython 3.11 的 Windows Proactor 事件循环：
+`accept` 失败（客户端连上后立刻 RST，`ERROR_NETNAME_DELETED=64`）时，
+`asyncio\proactor_events.py` 会 `sock.close()` 且**不再重新 accept**。
+服务于是变成「进程活着、端口不再接客」：启动器探活一直失败，90 秒后报启动超时；
+只有重启才能恢复。（上游 main 已改成 `ConnectionResetError` 后继续 accept，
+但 3.13/3.14 正式版还没带上。）
+
+修法：
+
+- 新增 `run.py`：在创建事件循环之前设 `WindowsSelectorEventLoopPolicy`，
+  用 `select()+accept()`，不再走 `AcceptEx`；启动器、`start.bat`、NSSM 服务全部改走它。
+- 日志合并：`run.py` 把 stdout/stderr 和 `streamlit.*` 日志收进
+  `logs\lion-monitor.log`（服务模式不再挂控制台 handler），`server.log` 只在
+  `run.py` 起不来时留兜底报错。启动横幅、uvicorn 启动行翻成中文；Streamlit 的
+  16 行 CORS 提示压成一行中文；asyncio 的 accept 噪音翻成一行并去掉 traceback。
+- `launcher.log` 超过 1 MB 自动轮转一份；`server.log` 每次启动重写。
+- 回归：`tests\test_entry_run.py`（事件循环策略、日志翻译/去噪、stdout 收编、
+  三个入口都走 `run.py`）。

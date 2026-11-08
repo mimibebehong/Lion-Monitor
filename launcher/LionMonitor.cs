@@ -7,11 +7,12 @@
 // 做的事情（方案 §3 + §12 + §16）：
 //   1. 已经在跑 → 直接开浏览器（防重复启动，不占内存）
 //   2. 没在跑 → 显示「正在启动…」小窗口（避免用户以为没反应而反复双击）
-//   3. 后台起服务：runtime\python.exe -m streamlit run app\main.py --server.address 0.0.0.0
-//      （0.0.0.0 = 局域网同事也能访问；headless = 不自己弹浏览器）
+//   3. 后台起服务：runtime\python.exe run.py run app\main.py --server.address 0.0.0.0
+//      （0.0.0.0 = 局域网同事也能访问；headless = 不自己弹浏览器；run.py 固定
+//        Selector 事件循环，避免 Windows Proactor 的 accept 断链问题）
 //   4. 轮询 /_stcore/health，最多 90 秒（Server 2022 冷启动慢）
 //   5. 通了 → 优先用 Edge/Chrome 打开（Server 2022 默认只有 IE11，Streamlit 不支持 IE）
-//   6. 超时/进程退出 → 弹窗显示 logs\server.log 末尾 20 行 + 日志路径，并把结论写进 logs\launcher.log
+//   6. 超时/进程退出 → 弹窗显示 logs\lion-monitor.log 末尾 20 行 + 日志路径，并把结论写进 logs\launcher.log
 
 using System;
 using System.Diagnostics;
@@ -225,10 +226,18 @@ namespace LionMonitorLauncher
                 throw new FileNotFoundException(
                     "找不到程序：" + mainPy + "\n安装包可能不完整，请重新安装 Lion-Monitor。");
             }
+            // run.py = 固定用 Selector 事件循环（Windows 上 Proactor 遇到 WinError 64 会
+            // 关掉监听 socket，服务变成“进程在、网页打不开”，只能重启）。
+            string entryPy = Path.Combine(appDir, "run.py");
+            if (!File.Exists(entryPy))
+            {
+                throw new FileNotFoundException(
+                    "找不到服务入口：" + entryPy + "\n安装包可能不完整，请重新安装 Lion-Monitor。");
+            }
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = python;
-            psi.Arguments = "-m streamlit run \"" + mainPy + "\""
+            psi.Arguments = "\"" + entryPy + "\" run \"" + mainPy + "\""
                 + " --server.address 0.0.0.0"
                 + " --server.port " + port
                 + " --server.headless true"
@@ -249,6 +258,8 @@ namespace LionMonitorLauncher
             psi.EnvironmentVariables["LION_LOG_DIR"] = Path.Combine(appDir, "logs");
             psi.EnvironmentVariables["LION_DB"] = Path.Combine(dataDir, "lion.db");
             psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+            // 服务输出统一进 lion-monitor.log（run.py 负责收集），server.log 只做兜底
+            psi.EnvironmentVariables["LION_LOG_CAPTURE"] = "1";
 
             Process proc = Process.Start(psi);
             if (proc == null)
@@ -269,6 +280,17 @@ namespace LionMonitorLauncher
             catch (Exception) { }
 
             string serverLog = Path.Combine(appDir, "logs", "server.log");
+            // 每次启动重写：正常情况这个文件只有一行说明（输出都被 run.py 收进
+            // lion-monitor.log 了）；只有 run.py 起不来时才会留下 Python 的原始报错。
+            try
+            {
+                File.WriteAllText(
+                    serverLog,
+                    "（运行日志见 lion-monitor.log；本文件只保留服务启动前的兜底输出）"
+                        + Environment.NewLine,
+                    new UTF8Encoding(false));
+            }
+            catch (Exception) { }
             LineWriter writer = new LineWriter(serverLog);
             proc.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
             {
@@ -363,8 +385,8 @@ namespace LionMonitorLauncher
             sb.AppendLine();
             if (!string.IsNullOrEmpty(detail)) { sb.AppendLine(detail); }
             sb.AppendLine();
-            sb.AppendLine("日志（前 20 行 END，看最后的报错）：");
-            sb.AppendLine(ReadTail(Path.Combine(appDir, "logs", "server.log"), 20));
+            sb.AppendLine("日志（logs\\lion-monitor.log 末尾 20 行）：");
+            sb.AppendLine(FailureLogTail(appDir, 20));
             sb.AppendLine();
             sb.AppendLine("完整日志目录：" + Path.Combine(appDir, "logs"));
             sb.AppendLine("排障可运行 start.bat（会显示完整输出）。");
@@ -388,11 +410,19 @@ namespace LionMonitorLauncher
             sb.AppendLine("3. 重新运行安装包（会先自动停掉旧实例，再补齐所有文件）；");
             sb.AppendLine("4. 仍然不行：开始菜单 →「Lion-Monitor 日志目录」，把日志发给技术支持。");
             sb.AppendLine();
-            sb.AppendLine("服务日志（logs\\server.log 末尾 20 行）：");
-            sb.AppendLine(ReadTail(Path.Combine(appDir, "logs", "server.log"), 20));
+            sb.AppendLine("服务日志（logs\\lion-monitor.log 末尾 20 行）：");
+            sb.AppendLine(FailureLogTail(appDir, 20));
             sb.AppendLine();
             sb.AppendLine("日志目录：" + Path.Combine(appDir, "logs"));
             return sb.ToString();
+        }
+
+        private static string FailureLogTail(string appDir, int lines)
+        {
+            string main = Path.Combine(appDir, "logs", "lion-monitor.log");
+            if (File.Exists(main)) { return ReadTail(main, lines); }
+            // run.py 都没起来时，lion-monitor.log 还不存在，退回启动前的兜底输出
+            return ReadTail(Path.Combine(appDir, "logs", "server.log"), lines);
         }
 
         internal static string ReadTail(string path, int lines)
@@ -425,9 +455,24 @@ namespace LionMonitorLauncher
         {
             try
             {
+                // 启动器日志也会一直追加，超过 1 MB 轮转一份，避免现场越攒越大
+                RotateIfTooLarge(logFile);
                 string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message
                     + Environment.NewLine;
                 File.AppendAllText(logFile, line, Encoding.UTF8);
+            }
+            catch (Exception) { }
+        }
+
+        private static void RotateIfTooLarge(string path)
+        {
+            try
+            {
+                FileInfo info = new FileInfo(path);
+                if (!info.Exists || info.Length < 1024 * 1024) { return; }
+                string backup = path + ".1";
+                if (File.Exists(backup)) { File.Delete(backup); }
+                File.Move(path, backup);
             }
             catch (Exception) { }
         }

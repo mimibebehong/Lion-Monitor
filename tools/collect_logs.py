@@ -1,9 +1,12 @@
 """把现场所有日志打包成**一个 txt 文件**，方便发给技术支持。
 
-为什么需要：现场出问题时，日志分散在 logs\\launcher.log、server.log、
-lion-monitor.log、selfcheck.log、service.log…… 让人一个个找、一个个发，
+为什么需要：现场出问题时，日志分散在 logs\\lion-monitor.log、launcher.log、
+server.log、selfcheck.log、service.log…… 让人一个个找、一个个发，
 十有八九漏掉最关键的那个（马哥 2026-11-06：同事机器装完打开是 500，只捞到
 launcher/selfcheck，缺的正是 server.log）。
+
+0.1.2 起服务输出（Streamlit 启动横幅、uvicorn、print）统一进 lion-monitor.log，
+server.log 只在 run.py 起不来时留兜底报错；这个脚本仍然全收，避免漏。
 
 用法（安装目录下）：
 

@@ -365,7 +365,7 @@ def copy_code() -> None:
     else:
         log("没有 docs\\manual，安装包不带用户手册", level="warn")
 
-    for name in ("VERSION", "start.bat", "stop.bat", "requirements-win.txt", "build.bat"):
+    for name in ("VERSION", "run.py", "start.bat", "stop.bat", "requirements-win.txt", "build.bat"):
         source = ROOT / name
         if source.exists():
             shutil.copy2(source, DIST / name)

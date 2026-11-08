@@ -289,6 +289,7 @@ def check_port(port: int, expect_stopped: bool = False) -> Check:
 #: 程序文件完整性：缺一个就打不开（首页 500 最常见的来源就是静态资源/入口缺失）
 REQUIRED_FILES = (
     "LionMonitor.exe",
+    "run.py",
     "app/main.py",
     "app/nav_state.py",
     "app/ui.py",

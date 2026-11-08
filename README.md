@@ -88,11 +88,15 @@ build.bat --no-installer
 :: 之后：只换代码，秒级
 build.bat --skip-runtime --skip-deps --no-installer
 
-:: 启动（绿色包）
+:: 启动（绿色包；内部是 run.py，Selector 事件循环 + 统一日志）
 dist\LionMonitor.exe
 ```
 
 浏览器自动打开 `http://localhost:8501`。
+
+服务日志统一在 `logs\lion-monitor.log`（10 MB × 5 轮转）：启动信息、Streamlit
+异常、页面未捕获异常都在这一个文件；`logs\launcher.log` 只记启动器，`logs\server.log`
+只在 `run.py` 起不来时留兜底报错。
 
 ### 2. 跑测试 / 静态检查
 
@@ -213,8 +217,8 @@ times, s_freqs, db = stft_db(record.samples, record.meta.sample_rate_hz)
 ## 运行监控前端
 
 ```bash
-.venv/bin/python -m streamlit run app/main.py
-# 默认 http://localhost:8501
+.venv/bin/python run.py run app/main.py
+# 默认 http://localhost:8501；run.py 会统一切事件循环策略并初始化日志
 ```
 
 13 个页面全部读 `data/lion.db`：工作台、任务列表、健康树配置、监测对象、传感器、

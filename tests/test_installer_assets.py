@@ -44,6 +44,7 @@ def _strip_csharp_comments(text: str) -> str:
         SERVICE_REMOVE,
         ROOT / "start.bat",
         ROOT / "stop.bat",
+        ROOT / "run.py",
         ROOT / "tools" / "selfcheck.py",
         RELOCATE,
         ROOT / "installer" / "lion.ico",
